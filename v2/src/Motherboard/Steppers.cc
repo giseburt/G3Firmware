@@ -40,7 +40,8 @@ public:
 		}
 		direction = true;
 		if (delta != 0) {
-			interface->setEnabled(true);
+			if (interface != 0)
+				interface->setEnabled(true);
 		}
 		if (delta < 0) {
 			delta = -delta;
@@ -51,7 +52,8 @@ public:
 	/// Set homing mode
 	void setHoming(const bool direction_in) {
 		direction = direction_in;
-		interface->setEnabled(true);
+		if (interface != 0)
+			interface->setEnabled(true);
 		delta = 1;
 	}
 
@@ -62,7 +64,8 @@ public:
 
 	/// Enable/disable stepper
 	void enableStepper(bool enable) {
-		interface->setEnabled(enable);
+		if (interface != 0)
+			interface->setEnabled(enable);
 	}
 
 	/// Reset to initial state
@@ -71,33 +74,36 @@ public:
 		minimum = 0;
 		maximum = 0;
 		target = 0;
-		counter = 0;
+		counter = -1; // default to off
+		ticks_per_step = 0;
 		delta = 0;
 	}
 
 	void doInterrupt(const int32_t intervals) {
-		counter += delta;
-		if (counter >= 0) {
-			interface->setDirection(direction);
-			counter -= intervals;
+		counter--;
+		if (counter == 0) {
+			if (interface != 0)
+				interface->setDirection(direction);
+			counter = ticks_per_step;
 			if (direction) {
-				if (!interface->isAtMaximum()) interface->step(true);
+				if (interface != 0 && !interface->isAtMaximum()) interface->step(true);
 				position++;
 			} else {
-				if (!interface->isAtMinimum()) interface->step(true);
+				if (interface != 0 && !interface->isAtMinimum()) interface->step(true);
 				position--;
 			}
-			interface->step(false);
+			if (interface != 0)
+				interface->step(false);
 		}
 	}
 
 	// Return true if still homing; false if done.
 	bool doHoming(const int32_t intervals) {
-		if (delta == 0) return false;
-		counter += delta;
-		if (counter >= 0) {
+		if (delta == 0 || interface == 0) return false;
+		counter--;
+		if (counter == 0) {
 			interface->setDirection(direction);
-			counter -= intervals;
+			counter = ticks_per_step;
 			if (direction) {
 				if (!interface->isAtMaximum()) {
 					interface->step(true);
@@ -118,7 +124,8 @@ public:
 		return true;
 	}
 
-	StepperInterface* interface;
+	StepperInterface* 
+	;
 	/// Current position on this axis, in steps
 	volatile int32_t position;
 	/// Minimum position, in steps
@@ -127,16 +134,18 @@ public:
 	int32_t maximum;
 	/// Target position, in steps
 	volatile int32_t target;
-	/// Step counter; represents the proportion of a
-	/// step so far passed.  When the counter hits
-	/// zero, a step is taken.
+	/// Step counter; represents the numbr of steps left to skip.
+	/// When the counter hits zero, a step is taken.
 	volatile int32_t counter;
-	/// Amount to increment counter per tick
+	/// Total number of steps to take
 	volatile int32_t delta;
+	/// How many steps of the master axis per step of this axis
+	volatile int32_t ticks_per_step;
 	/// True for positive, false for negative
 	volatile bool direction;
 };
 
+	
 volatile bool is_running;
 int32_t intervals;
 volatile int32_t intervals_remaining;
