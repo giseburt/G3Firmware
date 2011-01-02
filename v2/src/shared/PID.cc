@@ -35,7 +35,7 @@ void PID::reset() {
 	prev_error = 0;
 	delta_idx = 0;
 	sp = 0;
-	p_gain = i_gain = d_gain = 0;
+	p_gain = i_gain = d_gain = i_term_limit = 0;
 	for (delta_idx = 0; delta_idx < DELTA_SAMPLES; delta_idx++) {
 		delta_history[delta_idx] = 0;
 	}
@@ -64,6 +64,14 @@ int PID::calculate(const int pv) {
 	}
 	float p_term = (float)e * p_gain;
 	float i_term = (float)error_acc * i_gain;
+	
+	// prevent overshoots
+	if (i_term > i_term_limit)
+		i_term = i_term_limit;
+	// Integral below limit (integral wind-down?)
+	else if (i_term < -i_term_limit)
+		i_term = -i_term_limit;
+
 	int delta = e - prev_error;
 	// Add to delta history
 	delta_summation -= delta_history[delta_idx];

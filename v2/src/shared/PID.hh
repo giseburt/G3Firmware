@@ -34,6 +34,7 @@ class PID {
 private:
     float p_gain; // proportional gain
     float i_gain; // integral gain
+    float i_term_limit; // integral gain limiter (Ultimachine RepRap inspired)
     float d_gain; // derivative gain
 
     // Data for approximating d (smoothing to handle discrete nature of sampling).
@@ -50,7 +51,7 @@ private:
 public:
     PID() { reset(); }
     void setPGain(const float p_gain_in) { p_gain = p_gain_in; }
-    void setIGain(const float i_gain_in) { i_gain = i_gain_in; }
+    void setIGain(const float i_gain_in) { i_gain = i_gain_in; i_term_limit = 20/i_gain; }
     void setDGain(const float d_gain_in) { d_gain = d_gain_in; }
 
     void setTarget(const int target) { sp = target; }
