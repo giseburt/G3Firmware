@@ -62,6 +62,11 @@ public:
 		position = position_in;
 	}
 
+	/// Set the scale value
+	void setScale(const int32_t scale_in) {
+		scale = scale_in;
+	}
+	
 	/// Enable/disable stepper
 	void enableStepper(bool enable) {
 		if (interface != 0)
@@ -76,6 +81,7 @@ public:
 		target = 0;
 		counter = 0;
 		delta = 0;
+		scale = 1;
 	}
 	
 	inline bool atTarget() {
@@ -153,6 +159,8 @@ public:
 	volatile int32_t delta;
 	/// True for positive, false for negative
 	volatile bool direction;
+	/// Scale of the axis
+	volatile int32_t scale;
 };
 
 	
@@ -180,6 +188,9 @@ void init(Motherboard& motherboard) {
 	}
 	// add virual interface for feedrate
 	axes[STEPPER_COUNT] = Axis();
+	
+	feedrate_scale=1;
+	// FIXME! This needs to come from a command!
 }
 
 void abort() {
@@ -222,6 +233,11 @@ void setTarget(const Point& target, int32_t dda_interval) {
 		}
 	}
 	
+	// undo scaling before setting position
+	axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position * feedrate_scale;
+	
+	axes[FEEDRATE_AXIS].position = dda_interval;
+	
 	feedrate_scale = 1;
 	axes[FEEDRATE_AXIS].setTarget(dda_interval);
 	if (axes[FEEDRATE_AXIS].delta > max_delta*3) {
@@ -229,9 +245,10 @@ void setTarget(const Point& target, int32_t dda_interval) {
 		axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position / feedrate_scale;
 		axes[FEEDRATE_AXIS].target = axes[FEEDRATE_AXIS].target / feedrate_scale;
 		axes[FEEDRATE_AXIS].delta = axes[FEEDRATE_AXIS].delta / feedrate_scale;
-		if (axes[FEEDRATE_AXIS].delta > max_delta)
-			max_delta = axes[FEEDRATE_AXIS].delta;
 	}
+
+	if (axes[FEEDRATE_AXIS].delta > max_delta)
+		max_delta = axes[FEEDRATE_AXIS].delta;
 	
 	// compute number of intervals for this move
 	intervals = max_delta;
@@ -293,7 +310,7 @@ void enableAxis(uint8_t which, bool enable) {
 bool doInterrupt() {
 	if (is_running) {
 		ticks_left--;
-		if (ticks_left == 0) {
+		if (ticks_left <= 0) {
 			if (intervals_remaining-- == 0) {
 				is_running = false;
 			} else {
@@ -303,7 +320,7 @@ bool doInterrupt() {
 				}
 				bool feedrate_stepped = axes[FEEDRATE_AXIS].doInterrupt(intervals);
 				// only if it stepped and the feedrate has changed
-				if (took_step && feedrate_stepped) {
+				if (/*took_step && */feedrate_stepped) {
 					ticks_per_step = (axes[FEEDRATE_AXIS].position * feedrate_scale) / INTERVAL_IN_MICROSECONDS;
 				}
 				ticks_left = ticks_per_step;
