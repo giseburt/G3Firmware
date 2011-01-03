@@ -74,17 +74,26 @@ public:
 		minimum = 0;
 		maximum = 0;
 		target = 0;
-		counter = -1; // default to off
-		ticks_per_step = 0;
+		counter = 0;
 		delta = 0;
 	}
-
-	void doInterrupt(const int32_t intervals) {
-		counter--;
-		if (counter == 0) {
+	
+	inline bool atTarget() {
+		if (position == target)
+			return true;
+		return false;
+	}
+	
+	// return if we took a step
+	bool doInterrupt(const int32_t intervals) {
+		if (atTarget())
+			return false;
+		
+		counter += delta;
+		if (counter >= 0) {
 			if (interface != 0)
 				interface->setDirection(direction);
-			counter = ticks_per_step;
+			counter -= intervals;
 			if (direction) {
 				if (interface != 0 && !interface->isAtMaximum()) interface->step(true);
 				position++;
@@ -94,16 +103,19 @@ public:
 			}
 			if (interface != 0)
 				interface->step(false);
+
+			return true;
 		}
+		return false;
 	}
 
 	// Return true if still homing; false if done.
 	bool doHoming(const int32_t intervals) {
 		if (delta == 0 || interface == 0) return false;
-		counter--;
-		if (counter == 0) {
+		counter += delta;
+		if (counter >= 0) {
 			interface->setDirection(direction);
-			counter = ticks_per_step;
+			counter -= intervals;
 			if (direction) {
 				if (!interface->isAtMaximum()) {
 					interface->step(true);
@@ -124,8 +136,7 @@ public:
 		return true;
 	}
 
-	StepperInterface* 
-	;
+	StepperInterface* interface;
 	/// Current position on this axis, in steps
 	volatile int32_t position;
 	/// Minimum position, in steps
@@ -134,13 +145,12 @@ public:
 	int32_t maximum;
 	/// Target position, in steps
 	volatile int32_t target;
-	/// Step counter; represents the numbr of steps left to skip.
-	/// When the counter hits zero, a step is taken.
+	/// Step counter; represents the proportion of a
+	/// step so far passed.  When the counter hits
+	/// zero, a step is taken.
 	volatile int32_t counter;
-	/// Total number of steps to take
+	/// Amount to increment counter per tick
 	volatile int32_t delta;
-	/// How many steps of the master axis per step of this axis
-	volatile int32_t ticks_per_step;
 	/// True for positive, false for negative
 	volatile bool direction;
 };
@@ -149,7 +159,13 @@ public:
 volatile bool is_running;
 int32_t intervals;
 volatile int32_t intervals_remaining;
-Axis axes[STEPPER_COUNT];
+#define AXIS_COUNT STEPPER_COUNT+1
+// The index of the feedrate axis:
+#define FEEDRATE_AXIS STEPPER_COUNT
+Axis axes[AXIS_COUNT]; // add a virtal axis for feedrate
+// To keep from over stepping for the feed rate, we might scale it
+volatile int8_t feedrate_scale;
+volatile int32_t ticks_left, ticks_per_step;
 volatile bool is_homing;
 
 bool isRunning() {
@@ -162,6 +178,8 @@ void init(Motherboard& motherboard) {
 	for (int i = 0; i < STEPPER_COUNT; i++) {
 		axes[i] = Axis(motherboard.getStepperInterface(i));
 	}
+	// add virual interface for feedrate
+	axes[STEPPER_COUNT] = Axis();
 }
 
 void abort() {
@@ -193,7 +211,7 @@ void setHoldZ(bool holdZ_in) {
 
 void setTarget(const Point& target, int32_t dda_interval) {
 	int32_t max_delta = 0;
-	for (int i = 0; i < AXIS_COUNT; i++) {
+	for (int i = 0; i < STEPPER_COUNT; i++) {
 		axes[i].setTarget(target[i], false);
 		const int32_t delta = axes[i].delta;
 		// Only shut z axis on inactivity
@@ -203,13 +221,28 @@ void setTarget(const Point& target, int32_t dda_interval) {
 			max_delta = delta;
 		}
 	}
+	
+	feedrate_scale = 1;
+	axes[FEEDRATE_AXIS].setTarget(dda_interval);
+	if (axes[FEEDRATE_AXIS].delta > max_delta*3) {
+		feedrate_scale = axes[FEEDRATE_AXIS].delta / max_delta;
+		axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position / feedrate_scale;
+		axes[FEEDRATE_AXIS].target = axes[FEEDRATE_AXIS].target / feedrate_scale;
+		axes[FEEDRATE_AXIS].delta = axes[FEEDRATE_AXIS].delta / feedrate_scale;
+		if (axes[FEEDRATE_AXIS].delta > max_delta)
+			max_delta = axes[FEEDRATE_AXIS].delta;
+	}
+	
 	// compute number of intervals for this move
-	intervals = ((max_delta * dda_interval) / INTERVAL_IN_MICROSECONDS);
+	intervals = max_delta;
 	intervals_remaining = intervals;
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
 	}
+	
+	ticks_per_step = ticks_left = (axes[FEEDRATE_AXIS].position * feedrate_scale) / INTERVAL_IN_MICROSECONDS;
+	
 	is_running = true;
 }
 
@@ -239,7 +272,7 @@ void startHoming(const bool maximums, const uint8_t axes_enabled, const uint32_t
 	intervals_remaining = INT32_MAX;
 	intervals = us_per_step / INTERVAL_IN_MICROSECONDS;
 	const int32_t negative_half_interval = -intervals / 2;
-	for (int i = 0; i < AXIS_COUNT; i++) {
+	for (int i = 0; i < STEPPER_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
 		if ((axes_enabled & (1<<i)) != 0) {
 			axes[i].setHoming(maximums);
@@ -259,11 +292,21 @@ void enableAxis(uint8_t which, bool enable) {
 
 bool doInterrupt() {
 	if (is_running) {
-		if (intervals_remaining-- == 0) {
-			is_running = false;
-		} else {
-			for (int i = 0; i < STEPPER_COUNT; i++) {
-				axes[i].doInterrupt(intervals);
+		ticks_left--;
+		if (ticks_left == 0) {
+			if (intervals_remaining-- == 0) {
+				is_running = false;
+			} else {
+				bool took_step = false;
+				for (int i = 0; i < STEPPER_COUNT; i++) {
+					took_step |= axes[i].doInterrupt(intervals);
+				}
+				bool feedrate_stepped = axes[FEEDRATE_AXIS].doInterrupt(intervals);
+				// only if it stepped and the feedrate has changed
+				if (took_step && feedrate_stepped) {
+					ticks_per_step = (axes[FEEDRATE_AXIS].position * feedrate_scale) / INTERVAL_IN_MICROSECONDS;
+				}
+				ticks_left = ticks_per_step;
 			}
 		}
 		return is_running;
