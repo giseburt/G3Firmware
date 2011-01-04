@@ -187,7 +187,7 @@ void init(Motherboard& motherboard) {
 		axes[i] = Axis(motherboard.getStepperInterface(i));
 	}
 	// add virual interface for feedrate
-	axes[STEPPER_COUNT] = Axis();
+	axes[FEEDRATE_AXIS] = Axis();
 	
 	feedrate_scale=1;
 	// FIXME! This needs to come from a command!
@@ -234,11 +234,22 @@ void setTarget(const Point& target, int32_t dda_interval) {
 	}
 	
 	// undo scaling before setting position
+	if (axes[FEEDRATE_AXIS].position == 0)
+		axes[FEEDRATE_AXIS].position = dda_interval;
+	
 	axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position * feedrate_scale;
-	
-	axes[FEEDRATE_AXIS].position = dda_interval;
-	
 	feedrate_scale = 1;
+	
+	// To disable interpolation, uncomment this:
+	//axes[FEEDRATE_AXIS].position = dda_interval;
+	
+	if (max_delta == 0) {
+		axes[FEEDRATE_AXIS].position = dda_interval;
+		intervals_remaining = 0;
+		is_running = false;
+		return;
+	}
+	
 	axes[FEEDRATE_AXIS].setTarget(dda_interval);
 	if (axes[FEEDRATE_AXIS].delta > max_delta*3) {
 		feedrate_scale = axes[FEEDRATE_AXIS].delta / max_delta;
@@ -309,8 +320,7 @@ void enableAxis(uint8_t which, bool enable) {
 
 bool doInterrupt() {
 	if (is_running) {
-		ticks_left--;
-		if (ticks_left <= 0) {
+		if (ticks_left-- == 0) {
 			if (intervals_remaining-- == 0) {
 				is_running = false;
 			} else {
@@ -320,7 +330,7 @@ bool doInterrupt() {
 				}
 				bool feedrate_stepped = axes[FEEDRATE_AXIS].doInterrupt(intervals);
 				// only if it stepped and the feedrate has changed
-				if (/*took_step && */feedrate_stepped) {
+				if (took_step && feedrate_stepped) {
 					ticks_per_step = (axes[FEEDRATE_AXIS].position * feedrate_scale) / INTERVAL_IN_MICROSECONDS;
 				}
 				ticks_left = ticks_per_step;
