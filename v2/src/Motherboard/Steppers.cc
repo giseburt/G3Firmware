@@ -23,7 +23,9 @@ namespace steppers {
 
 class Axis {
 public:
-	Axis() : interface(0) {}
+	Axis() : interface(0) {
+		reset();
+	}
 
 	Axis(StepperInterface& stepper_interface) :
 		interface(&stepper_interface) {
