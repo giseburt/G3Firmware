@@ -235,10 +235,11 @@ void setTarget(const Point& target, int32_t dda_interval) {
 		}
 	}
 	
-	// undo scaling before setting position
+	// if the feedrate has never been set, use the incoming one
 	if (axes[FEEDRATE_AXIS].position == 0)
 		axes[FEEDRATE_AXIS].position = dda_interval;
 	
+	// undo scaling before setting position
 	axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position * feedrate_scale;
 	feedrate_scale = 1;
 	
@@ -252,7 +253,8 @@ void setTarget(const Point& target, int32_t dda_interval) {
 		return;
 	}
 	
-	axes[FEEDRATE_AXIS].setTarget(dda_interval);
+	// Keep the feedrate scaling from requiring too many steps
+	axes[FEEDRATE_AXIS].setTarget(dda_interval, false);
 	if (axes[FEEDRATE_AXIS].delta > max_delta*3) {
 		feedrate_scale = axes[FEEDRATE_AXIS].delta / max_delta;
 		axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position / feedrate_scale;
@@ -277,7 +279,8 @@ void setTarget(const Point& target, int32_t dda_interval) {
 }
 
 void setTargetNew(const Point& target, int32_t us, uint8_t relative) {
-	for (int i = 0; i < AXIS_COUNT; i++) {
+	int32_t max_delta = 0;
+	for (int i = 0; i < STEPPER_COUNT; i++) {
 		axes[i].setTarget(target[i], (relative & (1 << i)) != 0);
 		// Only shut z axis on inactivity
 		const int32_t delta = axes[i].delta;
@@ -286,14 +289,25 @@ void setTargetNew(const Point& target, int32_t us, uint8_t relative) {
 		} else if (delta != 0) {
 			axes[i].enableStepper(true);
 		}
+		if (delta > max_delta) {
+			max_delta = delta;
+		}
 	}
+	
+	// we can't do interpolation here, and we're not going to try
+	axes[FEEDRATE_AXIS].position = us/max_delta;
+	axes[FEEDRATE_AXIS].setTarget(us/max_delta, false);
+	
 	// compute number of intervals for this move
-	intervals = us / INTERVAL_IN_MICROSECONDS;
+	intervals = max_delta;
 	intervals_remaining = intervals;
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
 	}
+	
+	ticks_per_step = ticks_left = axes[FEEDRATE_AXIS].position / INTERVAL_IN_MICROSECONDS;
+	
 	is_running = true;
 }
 
