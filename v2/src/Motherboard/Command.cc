@@ -246,6 +246,14 @@ void runCommandSlice() {
 					int32_t z = pop32();
 					steppers::definePosition(Point(x,y,z));
 				}
+			} else if (command == HOST_CMD_SET_AXIS_SCALE) {
+				// check for completion
+				if (command_buffer.getLength() >= 5) {
+					command_buffer.pop(); // remove the command code
+					int8_t  axis = pop8();
+					int32_t scale = pop32();
+					steppers::setAxisScale(axis, scale);
+				}
 			} else if (command == HOST_CMD_SET_POSITION_EXT) {
 				// check for completion
 				if (command_buffer.getLength() >= 21) {

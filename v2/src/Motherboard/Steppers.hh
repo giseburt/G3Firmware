@@ -39,6 +39,8 @@ bool isRunning();
 void abort();
 /// Enable/disable the given axis.
 void enableAxis(uint8_t which, bool enable);
+// Set the scale factor for the axis
+	void setAxisScale(uint8_t which, int32_t scale);
 /// Set current target
 void setTarget(const Point& target, int32_t dda_interval);
 /// Set new-style target, with time specified in ms and relative motion

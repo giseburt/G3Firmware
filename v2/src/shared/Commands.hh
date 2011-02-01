@@ -80,6 +80,8 @@
 
 #define HOST_CMD_QUEUE_POINT_NEW   142
 
+#define HOST_CMD_SET_AXIS_SCALE    143
+
 #define HOST_CMD_DEBUG_ECHO        0x70
 
 // These are our query commands from the host

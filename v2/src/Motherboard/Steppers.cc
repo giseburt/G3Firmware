@@ -40,6 +40,11 @@ public:
 		} else {
 			delta = target - position;
 		}
+		
+		unscaled_delta = delta;
+		
+		delta = (delta * scale) / 10000;
+		
 		direction = true;
 		if (delta != 0) {
 			if (interface != 0)
@@ -64,9 +69,11 @@ public:
 		position = position_in;
 	}
 
-	/// Set the scale value
+	/// Set the scale value, 10000 = 100%
 	void setScale(const int32_t scale_in) {
 		scale = scale_in;
+		
+		// should we do anything here with position, delta, etc?
 	}
 	
 	/// Enable/disable stepper
@@ -83,7 +90,8 @@ public:
 		target = 0;
 		counter = 0;
 		delta = 0;
-		scale = 1;
+		unscaled_delta = 0;
+		scale = 10000;
 	}
 	
 	inline bool atTarget() {
@@ -159,6 +167,8 @@ public:
 	volatile int32_t counter;
 	/// Amount to increment counter per tick
 	volatile int32_t delta;
+	/// The delta before scaling
+	volatile int32_t unscaled_delta;
 	/// True for positive, false for negative
 	volatile bool direction;
 	/// Scale of the axis
@@ -331,6 +341,13 @@ void startHoming(const bool maximums, const uint8_t axes_enabled, const uint32_t
 void enableAxis(uint8_t which, bool enable) {
 	if (which < STEPPER_COUNT) {
 		axes[which].enableStepper(enable);
+	}
+}
+	
+// Set the scale factor for the axis
+void setAxisScale(uint8_t which, int32_t scale) {
+	if (which < AXIS_COUNT) {
+		axes[which].setScale(scale);
 	}
 }
 
