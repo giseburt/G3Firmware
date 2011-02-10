@@ -254,7 +254,7 @@ void setTarget(const Point& target, int32_t dda_interval) {
 	feedrate_scale = 1;
 	
 	// To disable interpolation, uncomment this:
-	//axes[FEEDRATE_AXIS].position = dda_interval;
+	axes[FEEDRATE_AXIS].position = dda_interval;
 	
 	if (max_delta == 0) {
 		axes[FEEDRATE_AXIS].position = dda_interval;

@@ -59,7 +59,7 @@ void Motherboard::reset() {
 	getPSU().turnOn(true);
 	// Init steppers
 	// NB: for now, we are turning on Z hold for these boards!
-	steppers::setHoldZ(true);
+	//steppers::setHoldZ(true);
 	for (int i = 0; i < STEPPER_COUNT; i++) {
 		stepper[i].init(i);
 	}
