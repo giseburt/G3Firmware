@@ -36,11 +36,15 @@ public:
 	void reset();
 private:
 	MotorController();
-	bool set_with_rpm;
 	bool direction;
 	bool on;
 	int speed;
-	uint32_t rpm;
+	enum {
+		SET_AS_PWM,
+		SET_AS_RPM,
+		SET_AS_DDA,
+	} speed_set_as;
+	uint32_t rpm_or_dda;
 	bool paused;
 	static MotorController motor_controller;
 };

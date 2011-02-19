@@ -29,7 +29,7 @@ void setStepperMode(bool mode, bool external = false);
 // - = negative direction
 // Valid range: -255 through 255
 void setExtruderMotor(int16_t speed);
-void setExtruderMotorRPM(uint32_t micros, bool direction);
+void setExtruderMotorRPM(uint32_t micros, bool direction, bool isRPM);
 #ifdef DEFAULT_EXTERNAL_STEPPER
 void setExtruderMotorOn(bool on);
 #endif

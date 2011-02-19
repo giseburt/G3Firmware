@@ -141,7 +141,7 @@ void setExtruderMotor(int16_t speed) {
 
 
 // set the motor's  RPM -- in microseconds for one full revolution
-void setExtruderMotorRPM(uint32_t micros, bool direction) {
+void setExtruderMotorRPM(uint32_t micros, bool direction, bool isRPM) {
 	// Just ignore this command if we're not using an external stepper driver
 	if (!external_stepper_motor_mode) return;
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
