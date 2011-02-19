@@ -17,16 +17,19 @@
 
 #define __STDC_LIMIT_MACROS
 #include "Steppers.hh"
+#include "Commands.hh"
+#include "Tool.hh"
 #include <stdint.h>
 
 namespace steppers {
 
 class Axis {
 public:
-	Axis() : interface(0) {}
+	Axis() : interface(0), tool_id(255) {}
+	Axis(uint8_t tool) : interface(0), tool_id(tool) {}
 
 	Axis(StepperInterface& stepper_interface) :
-		interface(&stepper_interface) {
+		interface(&stepper_interface), tool_id(255) {
 		reset();
 	}
 
@@ -40,7 +43,8 @@ public:
 		}
 		direction = true;
 		if (delta != 0) {
-			interface->setEnabled(true);
+			enableStepper(true);
+
 		}
 		if (delta < 0) {
 			delta = -delta;
@@ -51,7 +55,11 @@ public:
 	/// Set homing mode
 	void setHoming(const bool direction_in) {
 		direction = direction_in;
-		interface->setEnabled(true);
+		if (interface != 0)
+			interface->setEnabled(true);
+		else {
+			//Don't home on A/B
+		}
 		delta = 1;
 	}
 
@@ -62,7 +70,49 @@ public:
 
 	/// Enable/disable stepper
 	void enableStepper(bool enable) {
-		interface->setEnabled(enable);
+		if (interface != 0)
+			interface->setEnabled(true);
+		else {
+			// don't bloat Gen4 with Gen3 stuff
+#if STEPPER_COUNT <= 3
+			//SLAVE_CMD_TOGGLE_MOTOR_1
+
+			if (tool::getLock()) {
+				OutPacket& out = tool::getOutPacket();
+				out.reset();
+				out.append8(tool_id); // copy tool index
+				out.append8(SLAVE_CMD_TOGGLE_MOTOR_1); // copy command code
+				out.append8(direction << 1 | enable);
+				
+				// we don't care about the response, so we can release
+				// the lock after we initiate the transfer
+				tool::startTransaction();
+				tool::releaseLock();
+			}
+#endif
+		}
+	}
+	
+	void setDDA(uint32_t dda_interval) {
+		if (interface == 0) {
+			// don't bloat Gen4 with Gen3 stuff
+#if STEPPER_COUNT <= 3
+			//SLAVE_CMD_SET_MOTOR_1_DDA
+			
+			if (tool::getLock()) {
+				OutPacket& out = tool::getOutPacket();
+				out.reset();
+				out.append8(tool_id); // copy tool index
+				out.append8(SLAVE_CMD_SET_MOTOR_1_DDA); // copy command code
+				out.append32(dda_interval);
+				
+				// we don't care about the response, so we can release
+				// the lock after we initiate the transfer
+				tool::startTransaction();
+				tool::releaseLock();
+			}
+#endif
+		}
 	}
 
 	/// Reset to initial state
@@ -135,6 +185,8 @@ public:
 	volatile int32_t delta;
 	/// True for positive, false for negative
 	volatile bool direction;
+	/// The tool index to control
+	uint8_t tool_id;
 };
 
 volatile bool is_running;
@@ -150,8 +202,11 @@ bool isRunning() {
 //public:
 void init(Motherboard& motherboard) {
 	is_running = false;
-	for (int i = 0; i < STEPPER_COUNT; i++) {
-		axes[i] = Axis(motherboard.getStepperInterface(i));
+	for (int i = 0; i < AXIS_COUNT; i++) {
+		if (i < STEPPER_COUNT)
+			axes[i] = Axis(motherboard.getStepperInterface(i));
+		else
+			axes[i] = Axis();			
 	}
 }
 
@@ -162,18 +217,14 @@ void abort() {
 
 /// Define current position as given point
 void definePosition(const Point& position) {
-	for (int i = 0; i < STEPPER_COUNT; i++) {
+	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].definePosition(position[i]);
 	}
 }
 
 /// Get current position
 const Point getPosition() {
-#if STEPPER_COUNT > 3
 	return Point(axes[0].position,axes[1].position,axes[2].position,axes[3].position,axes[4].position);
-#else
-	return Point(axes[0].position,axes[1].position,axes[2].position);
-#endif
 }
 
 bool holdZ = false;
@@ -200,6 +251,7 @@ void setTarget(const Point& target, int32_t dda_interval) {
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
+		axes[i].setDDA((max_delta * dda_interval) / axes[i].delta);
 	}
 	is_running = true;
 }
@@ -221,6 +273,7 @@ void setTargetNew(const Point& target, int32_t us, uint8_t relative) {
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
+		axes[i].setDDA(us / axes[i].delta);
 	}
 	is_running = true;
 }
@@ -230,7 +283,7 @@ void startHoming(const bool maximums, const uint8_t axes_enabled, const uint32_t
 	intervals_remaining = INT32_MAX;
 	intervals = us_per_step / INTERVAL_IN_MICROSECONDS;
 	const int32_t negative_half_interval = -intervals / 2;
-	for (int i = 0; i < AXIS_COUNT; i++) {
+	for (int i = 0; i < STEPPER_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
 		if ((axes_enabled & (1<<i)) != 0) {
 			axes[i].setHoming(maximums);
@@ -243,7 +296,7 @@ void startHoming(const bool maximums, const uint8_t axes_enabled, const uint32_t
 
 /// Enable/disable the given axis.
 void enableAxis(uint8_t which, bool enable) {
-	if (which < STEPPER_COUNT) {
+	if (which < AXIS_COUNT) {
 		axes[which].enableStepper(enable);
 	}
 }
@@ -253,7 +306,7 @@ bool doInterrupt() {
 		if (intervals_remaining-- == 0) {
 			is_running = false;
 		} else {
-			for (int i = 0; i < STEPPER_COUNT; i++) {
+			for (int i = 0; i < AXIS_COUNT; i++) {
 				axes[i].doInterrupt(intervals);
 			}
 		}

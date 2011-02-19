@@ -22,7 +22,8 @@
 
 typedef uint32_t micros_t;
 
-#define AXIS_COUNT STEPPER_COUNT
+// Set this to 5 -- we will always have 5 axis, even if we only have 3 steppers
+#define AXIS_COUNT 5
 
 class Point {
 private:

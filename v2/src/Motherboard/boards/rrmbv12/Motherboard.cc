@@ -40,10 +40,10 @@ Motherboard::Motherboard() {
 	stepper[2] = StepperInterface(Z_DIR_PIN,Z_STEP_PIN,Z_ENABLE_PIN,Z_MAX_PIN,Z_MIN_PIN);
 #endif
 #if STEPPER_COUNT > 3
-	stepper[3] = StepperInterface(A_DIR_PIN,A_STEP_PIN,A_ENABLE_PIN,A_MAX_PIN,A_MIN_PIN);
+	stepper[3] = StepperInterface();
 #endif
 #if STEPPER_COUNT > 4
-	stepper[4] = StepperInterface(B_DIR_PIN,B_STEP_PIN,B_ENABLE_PIN,B_MAX_PIN,B_MIN_PIN);
+	stepper[4] = StepperInterface();
 #endif
 }
 

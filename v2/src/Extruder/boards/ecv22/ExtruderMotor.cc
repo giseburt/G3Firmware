@@ -146,14 +146,19 @@ void setExtruderMotorRPM(uint32_t micros, bool direction, bool isRPM) {
 	if (!external_stepper_motor_mode) return;
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
 		if (micros > 0) {
-			// 60,000,000 is one RPM
-			// 1,000,000 is one RPS
-			ext_stepper_ticks_per_step = (micros / ES_TICK_LENGTH) / extruder_steps_per_rev;
-			//ext_stepper_counter = 0;
+			if (isRPM) {
+				// 60,000,000 is one RPM
+				// 1,000,000 is one RPS
+				ext_stepper_ticks_per_step = (micros / ES_TICK_LENGTH) / extruder_steps_per_rev;
+				//ext_stepper_counter = 0;
+			} else {
+				ext_stepper_ticks_per_step = (micros / ES_TICK_LENGTH);
+				//ext_stepper_counter = 0;
+			}
 
 			// Timer/Counter 0 Output Compare A Match Interrupt On
-      // This is now done in setExtruderMotorOn()
-      // TIMSK0  = _BV(OCIE1A);
+			// This is now done in setExtruderMotorOn()
+			// TIMSK0  = _BV(OCIE1A);
 
 			external_dir_pin.setValue(direction); // true = forward
 			external_enable_pin.setValue(false); // true = disabled
