@@ -26,6 +26,7 @@ public:
 	void update();
 	void setSpeed(int speed);
 	void setRPMSpeed(uint32_t speed);
+	void setDDASpeed(uint32_t speed);
 	void setDir(bool dir);
 	void setOn(bool on);
 	void pause();
@@ -35,28 +36,12 @@ public:
 	void reset();
 private:
 	MotorController();
-	void loadBackoffParameters();
 	bool set_with_rpm;
 	bool direction;
 	bool on;
 	int speed;
 	uint32_t rpm;
 	bool paused;
-	// Backoff instrumentation
-	bool backoff_enabled;
-	enum {
-		BO_INACTIVE,
-		BO_HALT_1,
-		BO_REVERSE,
-		BO_HALT_2,
-		BO_FORWARD,
-	} backoff_state;
-	Timeout current_operation_timeout;
-	Timeout forward_trigger_timeout;
-	uint32_t halt_ms;
-	uint32_t reverse_ms;
-	uint32_t forward_ms;
-	uint32_t trigger_ms;
 	static MotorController motor_controller;
 };
 
