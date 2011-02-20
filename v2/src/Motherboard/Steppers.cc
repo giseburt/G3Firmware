@@ -18,8 +18,14 @@
 #define __STDC_LIMIT_MACROS
 #include "Steppers.hh"
 #include "Commands.hh"
+#include "Timeout.hh"
+#include "Errors.hh"
 #include "Tool.hh"
 #include <stdint.h>
+
+// FIXME -  duplicated from Host.cc
+#define HOST_TOOL_RESPONSE_TIMEOUT_MS 50
+#define HOST_TOOL_RESPONSE_TIMEOUT_MICROS (1000L*HOST_TOOL_RESPONSE_TIMEOUT_MS)
 
 namespace steppers {
 
@@ -77,18 +83,32 @@ public:
 #if STEPPER_COUNT <= 3
 			//SLAVE_CMD_TOGGLE_MOTOR_1
 
-			if (tool::getLock()) {
-				OutPacket& out = tool::getOutPacket();
-				out.reset();
-				out.append8(tool_id); // copy tool index
-				out.append8(SLAVE_CMD_TOGGLE_MOTOR_1); // copy command code
-				out.append8(direction << 1 | enable);
-				
-				// we don't care about the response, so we can release
-				// the lock after we initiate the transfer
-				tool::startTransaction();
-				tool::releaseLock();
+			Timeout acquire_lock_timeout;
+			acquire_lock_timeout.start(HOST_TOOL_RESPONSE_TIMEOUT_MS);
+			while (!tool::getLock()) {
+				if (acquire_lock_timeout.hasElapsed()) {
+					Motherboard::getBoard().indicateError(ERR_SLAVE_PACKET_MISC);
+					return;
+				}
 			}
+			OutPacket& out = tool::getOutPacket();
+			InPacket& in = tool::getInPacket();
+			out.reset();
+			out.append8(tool_id); // set tool index
+			out.append8(SLAVE_CMD_TOGGLE_MOTOR_1); // copy command code
+			out.append8(direction << 1 | enable);
+			
+			tool::startTransaction();
+			// WHILE: bounded by timeout in runToolSlice
+			while (!tool::isTransactionDone()) {
+				tool::runToolSlice();
+			}
+			if (!in.hasError()) {
+				if (in.read8(1) != 0) {
+					//?
+				}
+			}
+			tool::releaseLock();
 #endif
 		}
 	}
@@ -99,18 +119,32 @@ public:
 #if STEPPER_COUNT <= 3
 			//SLAVE_CMD_SET_MOTOR_1_DDA
 			
-			if (tool::getLock()) {
-				OutPacket& out = tool::getOutPacket();
-				out.reset();
-				out.append8(tool_id); // copy tool index
-				out.append8(SLAVE_CMD_SET_MOTOR_1_DDA); // copy command code
-				out.append32(dda_interval);
-				
-				// we don't care about the response, so we can release
-				// the lock after we initiate the transfer
-				tool::startTransaction();
-				tool::releaseLock();
+			Timeout acquire_lock_timeout;
+			acquire_lock_timeout.start(HOST_TOOL_RESPONSE_TIMEOUT_MS);
+			while (!tool::getLock()) {
+				if (acquire_lock_timeout.hasElapsed()) {
+					Motherboard::getBoard().indicateError(ERR_SLAVE_PACKET_MISC);
+					return;
+				}
 			}
+			OutPacket& out = tool::getOutPacket();
+			InPacket& in = tool::getInPacket();
+			out.reset();
+			out.append8(tool_id); // set tool index
+			out.append8(SLAVE_CMD_SET_MOTOR_1_DDA); // copy command code
+			out.append32(dda_interval);
+			
+			tool::startTransaction();
+			// WHILE: bounded by timeout in runToolSlice
+			while (!tool::isTransactionDone()) {
+				tool::runToolSlice();
+			}
+			if (!in.hasError()) {
+				if (in.read8(1) != 0) {
+					//?
+				}
+			}
+			tool::releaseLock();
 #endif
 		}
 	}
@@ -128,22 +162,29 @@ public:
 	void doInterrupt(const int32_t intervals) {
 		counter += delta;
 		if (counter >= 0) {
-			interface->setDirection(direction);
 			counter -= intervals;
 			if (direction) {
-				if (!interface->isAtMaximum()) interface->step(true);
 				position++;
 			} else {
-				if (!interface->isAtMinimum()) interface->step(true);
 				position--;
+			}				
+
+			if (interface != 0) {
+				interface->setDirection(direction);
+				if (direction) {
+					if (!interface->isAtMaximum()) interface->step(true);
+				} else {
+					if (!interface->isAtMinimum()) interface->step(true);
+				}
+				if (interface != 0)
+					interface->step(false);
 			}
-			interface->step(false);
 		}
 	}
 
 	// Return true if still homing; false if done.
 	bool doHoming(const int32_t intervals) {
-		if (delta == 0) return false;
+		if (delta == 0 || interface == 0) return false;
 		counter += delta;
 		if (counter >= 0) {
 			interface->setDirection(direction);
@@ -206,7 +247,7 @@ void init(Motherboard& motherboard) {
 		if (i < STEPPER_COUNT)
 			axes[i] = Axis(motherboard.getStepperInterface(i));
 		else
-			axes[i] = Axis();			
+			axes[i] = Axis(i-STEPPER_COUNT);			
 	}
 }
 

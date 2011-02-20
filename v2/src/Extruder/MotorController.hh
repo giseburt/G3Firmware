@@ -26,7 +26,7 @@ public:
 	void update();
 	void setSpeed(int speed);
 	void setRPMSpeed(uint32_t speed);
-	void setDDASpeed(uint32_t speed);
+	void setDDASpeed(uint32_t dda_interval);
 	void setDir(bool dir);
 	void setOn(bool on);
 	void pause();
@@ -39,11 +39,12 @@ private:
 	bool direction;
 	bool on;
 	int speed;
-	enum {
+	typedef enum {
 		SET_AS_PWM,
 		SET_AS_RPM,
 		SET_AS_DDA,
-	} speed_set_as;
+	} set_as_t;
+	set_as_t speed_set_as;
 	uint32_t rpm_or_dda;
 	bool paused;
 	static MotorController motor_controller;
