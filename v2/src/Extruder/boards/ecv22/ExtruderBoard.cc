@@ -172,15 +172,20 @@ void ExtruderBoard::reset(uint8_t resetFlags) {
 
 	// init after we know what kind of motor we're using
 	setMotorSpeed(0);
-	setMotorSpeedRPM(0, true, true);
+	setMotorSpeedRPM(0, true);
+	setMotorSpeedDDA(0, 0, 0, true, false);
 }
 
 void ExtruderBoard::setMotorSpeed(int16_t speed) {
 	setExtruderMotor(speed);
 }
 
-void ExtruderBoard::setMotorSpeedRPM(uint32_t speed, bool direction, bool isRPM) {
-	setExtruderMotorRPM(speed, direction, isRPM);
+void ExtruderBoard::setMotorSpeedRPM(uint32_t speed, bool direction) {
+	setExtruderMotorRPM(speed, direction);
+}
+
+void ExtruderBoard::setMotorSpeedDDA(uint32_t dda1, uint32_t dda2, uint32_t steps, bool direction, bool on) {
+	setExtruderMotorDDA(dda1, dda2, steps, direction, on);
 }
 
 micros_t ExtruderBoard::getCurrentMicros() {
