@@ -233,7 +233,7 @@ public:
 volatile bool is_running;
 int32_t intervals;
 volatile int32_t intervals_remaining;
-Axis axes[STEPPER_COUNT];
+Axis axes[AXIS_COUNT];
 volatile bool is_homing;
 
 bool isRunning() {
