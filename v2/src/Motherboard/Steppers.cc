@@ -51,14 +51,17 @@ public:
 		} else {
 			delta = target - position;
 		}
+		bool old_direction = direction;
 		direction = true;
-		if (delta != 0) {
-			enableStepper(true);
-
-		}
 		if (delta < 0) {
 			delta = -delta;
 			direction = false;
+		}
+		if (direction != old_direction)
+			direction_changed = true;
+
+		if (delta != 0) {
+			enableStepper(true);
 		}
 	}
 
@@ -80,7 +83,7 @@ public:
 
 	/// Enable/disable stepper
 	void enableStepper(bool enable) {
-		if (enable == enabled)
+		if (!direction_changed && enabled == enable)
 			return;
 		
 		enabled = enable;
@@ -105,7 +108,7 @@ public:
 			out.reset();
 			out.append8(tool_id); // set tool index
 			out.append8(SLAVE_CMD_TOGGLE_MOTOR_1); // copy command code
-			out.append8((direction << 1) | (enable & 0x01));
+			out.append8((direction ? 0x02 : 0x00) | (enable ? 0x01 : 0x00));
 			
 			tool::startTransaction();
 			// WHILE: bounded by timeout in runToolSlice
@@ -169,6 +172,7 @@ public:
 		counter = 0;
 		delta = 0;
 		enabled = false;
+		direction_changed = false;
 	}
 
 	void doInterrupt(const int32_t intervals) {
@@ -240,8 +244,9 @@ public:
 	volatile bool direction;
 	/// The tool index to control
 	uint8_t tool_id;
-	/// Keep track of enabled state to avoid extra comms
+	/// Keep track of enabled/direction state changes
 	bool enabled;
+	bool direction_changed;
 };
 
 volatile bool is_running;
@@ -268,6 +273,11 @@ void init(Motherboard& motherboard) {
 void abort() {
 	is_running = false;
 	is_homing = false;
+#if STEPPER_COUNT <= 3
+	for (int i = STEPPER_COUNT; i < AXIS_COUNT; i++) {
+		//axes[i].enableStepper(false);
+	}
+#endif
 }
 
 /// Define current position as given point

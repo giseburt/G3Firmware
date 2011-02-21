@@ -145,6 +145,7 @@ void setExtruderMotor(int16_t speed) {
 void setExtruderMotorRPM(uint32_t micros, bool direction) {
 	// Just ignore this command if we're not using an external stepper driver
 	if (!external_stepper_motor_mode) return;
+	return;
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
 		if (micros > 0) {
 			// 60,000,000 is one RPM
@@ -181,9 +182,10 @@ void setExtruderMotorDDA(uint32_t dda1, uint32_t dda2, uint32_t steps, bool dire
 			TIMSK0  = _BV(OCIE1A);
 			ext_stepper_ticks_per_step = (dda2 / ES_TICK_LENGTH);
 			// we quietly assign signed an unsigned value -- bug?
-			ext_stepper_steps_left = steps;
+			ext_stepper_steps_left = 5;
 						
 			external_dir_pin.setValue(direction); // true = forward
+			external_step_pin.setValue(false);
 		} else {
 			// Timer/Counter 0 Output Compare A Match Interrupt Off
 			TIMSK0  = 0;
@@ -243,13 +245,14 @@ ISR(TIMER0_OVF_vect) {
 // ## External Stepper Driving using Timer 0 Compare A ##
 
 ISR(TIMER0_COMPA_vect) {
-	if (ext_stepper_ticks_per_step > 0 && ext_stepper_steps_left != 0) {
+	if ((ext_stepper_ticks_per_step > 0) && (ext_stepper_steps_left != 0)) {
 		++ext_stepper_counter;
 		if (ext_stepper_counter >= ext_stepper_ticks_per_step) {
 			external_step_pin.setValue(true);
+
 			ext_stepper_counter -= ext_stepper_ticks_per_step;
-			if (ext_stepper_steps_left > 0)
-				--ext_stepper_steps_left;
+			ext_stepper_steps_left--;
+			
 			external_step_pin.setValue(false);
 		}
 	}

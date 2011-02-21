@@ -43,13 +43,13 @@ void MotorController::update() {
 	} else {
 #ifdef DEFAULT_EXTERNAL_STEPPER
 		if (speed_set_as == SET_AS_RPM) {
-			board.setMotorSpeedRPM(rpm_or_dda1, direction);
+			//board.setMotorSpeedRPM(rpm_or_dda1, direction);
 			// for RPM, we get a start or stop command seperate
-			board.setMotorOn(!paused && on);
+			//board.setMotorOn(!paused && on);
 		}
 		else
 		{	
-			board.setMotorSpeedDDA(rpm_or_dda1, dda2, steps, direction, on);
+			board.setMotorSpeedDDA(rpm_or_dda1, dda2, (paused ? 0 : steps), direction, on);
 		}
 #else
 		board.setMotorSpeedRPM((!paused&&on) ? rpm_or_dda : 0, direction);
