@@ -47,7 +47,8 @@ public:
 	Heater& getExtruderHeater() { return extruder_heater; }
 	Heater& getPlatformHeater() { return platform_heater; }
 	void setMotorSpeed(int16_t speed);
-	void setMotorSpeedRPM(uint32_t speed, bool direction, bool isRPM);
+	void setMotorSpeedRPM(uint32_t speed, bool direction);
+	void setMotorSpeedDDA(uint32_t dda1, uint32_t dda2, uint32_t steps, bool direction, bool on);
 #ifdef DEFAULT_EXTERNAL_STEPPER
 	// Hack to decouple holding torque from RPM speed
 	// Stops/starts the motor while holding torque

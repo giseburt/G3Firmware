@@ -26,7 +26,7 @@ public:
 	void update();
 	void setSpeed(int speed);
 	void setRPMSpeed(uint32_t speed);
-	void setDDASpeed(uint32_t dda_interval);
+	void setDDASpeed(uint32_t dda_interval1, uint32_t dda_interval2, uint32_t steps_in);
 	void setDir(bool dir);
 	void setOn(bool on);
 	void pause();
@@ -45,7 +45,9 @@ private:
 		SET_AS_DDA,
 	} set_as_t;
 	set_as_t speed_set_as;
-	uint32_t rpm_or_dda;
+	uint32_t rpm_or_dda1;
+	uint32_t dda2;
+	uint32_t steps;
 	bool paused;
 	static MotorController motor_controller;
 };

@@ -30,7 +30,9 @@ void MotorController::reset() {
 	paused = false;
 	on = false;
 	speed = 0;
-	rpm_or_dda = 0;
+	rpm_or_dda1 = 0;
+	dda2 = 0;
+	steps = 0;
 	speed_set_as = SET_AS_PWM;
 }
 void MotorController::update() {
@@ -40,8 +42,15 @@ void MotorController::update() {
 		board.setMotorSpeed(new_speed);
 	} else {
 #ifdef DEFAULT_EXTERNAL_STEPPER
-		board.setMotorSpeedRPM(rpm_or_dda, direction, (speed_set_as == SET_AS_RPM));
-		board.setMotorOn(!paused && on);
+		if (speed_set_as == SET_AS_RPM) {
+			board.setMotorSpeedRPM(rpm_or_dda1, direction);
+			// for RPM, we get a start or stop command seperate
+			board.setMotorOn(!paused && on);
+		}
+		else
+		{	
+			board.setMotorSpeedDDA(rpm_or_dda1, dda2, steps, direction, on);
+		}
 #else
 		board.setMotorSpeedRPM((!paused&&on) ? rpm_or_dda : 0, direction);
 #endif
@@ -55,12 +64,14 @@ void MotorController::setSpeed(int speed_in) {
 }
 
 void MotorController::setRPMSpeed(uint32_t speed_in) {
-	rpm_or_dda = speed_in;
+	rpm_or_dda1 = speed_in;
 	speed_set_as = SET_AS_RPM;
 }
 
-void MotorController::setDDASpeed(uint32_t dda_interval) {
-	rpm_or_dda = dda_interval;
+void MotorController::setDDASpeed(uint32_t dda_interval1, uint32_t dda_interval2, uint32_t steps_in) {
+	rpm_or_dda1 = dda_interval1;
+	dda2 = dda_interval2;
+	steps = steps_in;
 	speed_set_as = SET_AS_DDA;
 }
 
@@ -75,6 +86,5 @@ void MotorController::setDir(bool dir_in) {
 }
 
 void MotorController::setOn(bool on_in) {
-	ExtruderBoard& board = ExtruderBoard::getBoard();
 	on = on_in;
 }

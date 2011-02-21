@@ -29,6 +29,5 @@ void setStepperMode(bool mode, bool external = false);
 // - = negative direction
 // Valid range: -255 through 255
 void setExtruderMotor(int16_t speed);
-void setExtruderMotorRPM(uint32_t micros, bool direction);
 
 #endif // BOARDS_ECV22_EXTRUDER_MOTOR_HH_

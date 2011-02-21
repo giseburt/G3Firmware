@@ -31,8 +31,12 @@ namespace steppers {
 
 class Axis {
 public:
-	Axis() : interface(0), tool_id(255) {}
-	Axis(uint8_t tool) : interface(0), tool_id(tool) {}
+	Axis() : interface(0), tool_id(255) {
+		reset();
+	}
+	Axis(uint8_t tool) : interface(0), tool_id(tool) {
+		reset();
+	}
 
 	Axis(StepperInterface& stepper_interface) :
 		interface(&stepper_interface), tool_id(255) {
@@ -76,6 +80,11 @@ public:
 
 	/// Enable/disable stepper
 	void enableStepper(bool enable) {
+		if (enable == enabled)
+			return;
+		
+		enabled = enable;
+		
 		if (interface != 0)
 			interface->setEnabled(true);
 		else {
@@ -96,7 +105,7 @@ public:
 			out.reset();
 			out.append8(tool_id); // set tool index
 			out.append8(SLAVE_CMD_TOGGLE_MOTOR_1); // copy command code
-			out.append8(direction << 1 | enable);
+			out.append8((direction << 1) | (enable & 0x01));
 			
 			tool::startTransaction();
 			// WHILE: bounded by timeout in runToolSlice
@@ -132,7 +141,9 @@ public:
 			out.reset();
 			out.append8(tool_id); // set tool index
 			out.append8(SLAVE_CMD_SET_MOTOR_1_DDA); // copy command code
+			out.append32(dda_interval); // FIXME -- sending the same thing twice for now
 			out.append32(dda_interval);
+			out.append32(delta);
 			
 			tool::startTransaction();
 			// WHILE: bounded by timeout in runToolSlice
@@ -157,6 +168,7 @@ public:
 		target = 0;
 		counter = 0;
 		delta = 0;
+		enabled = false;
 	}
 
 	void doInterrupt(const int32_t intervals) {
@@ -228,6 +240,8 @@ public:
 	volatile bool direction;
 	/// The tool index to control
 	uint8_t tool_id;
+	/// Keep track of enabled state to avoid extra comms
+	bool enabled;
 };
 
 volatile bool is_running;

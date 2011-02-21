@@ -47,6 +47,7 @@ uint16_t extruder_steps_per_rev = 8000;
 
 volatile uint32_t ext_stepper_ticks_per_step = 0;
 volatile int32_t ext_stepper_counter = 0;
+volatile int32_t ext_stepper_steps_left = -1;
 
 
 // TIMER0 is used to PWM motor driver A enable on OC0B.
@@ -141,20 +142,16 @@ void setExtruderMotor(int16_t speed) {
 
 
 // set the motor's  RPM -- in microseconds for one full revolution
-void setExtruderMotorRPM(uint32_t micros, bool direction, bool isRPM) {
+void setExtruderMotorRPM(uint32_t micros, bool direction) {
 	// Just ignore this command if we're not using an external stepper driver
 	if (!external_stepper_motor_mode) return;
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
 		if (micros > 0) {
-			if (isRPM) {
-				// 60,000,000 is one RPM
-				// 1,000,000 is one RPS
-				ext_stepper_ticks_per_step = (micros / ES_TICK_LENGTH) / extruder_steps_per_rev;
-				//ext_stepper_counter = 0;
-			} else {
-				ext_stepper_ticks_per_step = (micros / ES_TICK_LENGTH);
-				//ext_stepper_counter = 0;
-			}
+			// 60,000,000 is one RPM
+			// 1,000,000 is one RPS
+			ext_stepper_ticks_per_step = (micros / ES_TICK_LENGTH) / extruder_steps_per_rev;
+			ext_stepper_steps_left = -1;
+			//ext_stepper_counter = 0;
 
 			// Timer/Counter 0 Output Compare A Match Interrupt On
 			// This is now done in setExtruderMotorOn()
@@ -172,7 +169,29 @@ void setExtruderMotorRPM(uint32_t micros, bool direction, bool isRPM) {
 			// DEBUG_LED.setValue(false);
 		}
 	}
+}
 
+// set the motor's DDA -- in microseconds for one full revolution
+void setExtruderMotorDDA(uint32_t dda1, uint32_t dda2, uint32_t steps, bool direction, bool on) {
+	// Just ignore this command if we're not using an external stepper driver
+	if (!external_stepper_motor_mode) return;
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+		// FIXME -- ignoring dda1 for now
+		if (dda2 > 0 && steps > 0) {
+			TIMSK0  = _BV(OCIE1A);
+			ext_stepper_ticks_per_step = (dda2 / ES_TICK_LENGTH);
+			// we quietly assign signed an unsigned value -- bug?
+			ext_stepper_steps_left = steps;
+						
+			external_dir_pin.setValue(direction); // true = forward
+		} else {
+			// Timer/Counter 0 Output Compare A Match Interrupt Off
+			TIMSK0  = 0;
+			ext_stepper_ticks_per_step = 0;
+			ext_stepper_steps_left = 0;
+		}
+		external_enable_pin.setValue(!on); // true = disabled
+	}
 }
 
 #ifdef DEFAULT_EXTERNAL_STEPPER
@@ -224,11 +243,13 @@ ISR(TIMER0_OVF_vect) {
 // ## External Stepper Driving using Timer 0 Compare A ##
 
 ISR(TIMER0_COMPA_vect) {
-	if (ext_stepper_ticks_per_step > 0) {
+	if (ext_stepper_ticks_per_step > 0 && ext_stepper_steps_left != 0) {
 		++ext_stepper_counter;
 		if (ext_stepper_counter >= ext_stepper_ticks_per_step) {
 			external_step_pin.setValue(true);
 			ext_stepper_counter -= ext_stepper_ticks_per_step;
+			if (ext_stepper_steps_left > 0)
+				--ext_stepper_steps_left;
 			external_step_pin.setValue(false);
 		}
 	}

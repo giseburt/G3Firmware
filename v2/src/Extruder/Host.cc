@@ -133,7 +133,7 @@ bool processQueryPacket(const InPacket& from_host, OutPacket& to_host) {
 			to_host.append8(RC_OK);
 			return true;
 		case SLAVE_CMD_SET_MOTOR_1_DDA:
-			motor.setDDASpeed(from_host.read32(2));
+			motor.setDDASpeed(from_host.read32(2),from_host.read32(6),from_host.read32(10));
 			to_host.append8(RC_OK);
 			return true;
 		case SLAVE_CMD_TOGGLE_FAN:

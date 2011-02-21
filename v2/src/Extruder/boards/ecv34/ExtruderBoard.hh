@@ -51,6 +51,7 @@ public:
 
 	void setMotorSpeed(int16_t speed);
 	void setMotorSpeedRPM(uint32_t speed, bool direction) {} // Unsupported on 3.4
+	void setMotorSpeedDDA(uint32_t dda1, uint32_t dda2, uint32_t steps, bool direction) {} // Unsupported on 3.4
 	void setFan(bool on);
 	void setValve(bool on);
 	UART& getHostUART() { return UART::getHostUART(); }
