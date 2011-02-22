@@ -48,6 +48,7 @@ private:
 	uint32_t rpm_or_dda1;
 	uint32_t dda2;
 	uint32_t steps;
+	bool changes_sent;
 	bool paused;
 	static MotorController motor_controller;
 };
