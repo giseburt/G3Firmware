@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 by Adam Mayer	 <adam@makerbot.com>
+ * Copyright 2011 by Matt Mets <matt.mets@makerbot.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,23 +15,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
+#ifndef SOFTWARE_SERVO_HH_
+#define SOFTWARE_SERVO_HH_
 
 #include "AvrPort.hh"
 
-#if defined(__AVR_ATmega644P__) || \
-	defined(__AVR_ATmega1280__) || \
-	defined(__AVR_ATmega2560__)
-Port PortA(0x20);
-#endif // __AVR_ATmega644P__
-Port PortB(0x23);
-Port PortC(0x26);
-Port PortD(0x29);
-#if defined (__AVR_ATmega1280__) || defined (__AVR_ATmega2560__)
-Port PortE(0x2C);
-Port PortF(0x2F);
-Port PortG(0x32);
-Port PortH(0x100);
-Port PortJ(0x103);
-Port PortK(0x106);
-Port PortL(0x109);
-#endif //__AVR_ATmega1280__
+class SoftwareServo {
+public:
+	SoftwareServo(Pin pin);
+	void setPosition(uint8_t position);
+	void enable();
+	void disable();
+
+	bool isEnabled() { return enabled; }
+	uint16_t getCounts() { return counts; }
+
+	Pin pin;				// Pin this servo is connected to
+private:
+	bool enabled;			// If true, enable servo
+	uint16_t counts;		// uS length of servo on-time
+};
+
+#endif

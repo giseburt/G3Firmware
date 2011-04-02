@@ -289,8 +289,7 @@ void setTarget(const Point& target, int32_t dda_interval) {
 }
 
 void setTargetNew(const Point& target, int32_t us, uint8_t relative) {
-	int32_t max_delta = 0;
-	for (int i = 0; i < STEPPER_COUNT; i++) {
+	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].setTarget(target[i], (relative & (1 << i)) != 0);
 		// Only shut z axis on inactivity
 		const int32_t delta = axes[i].delta;
