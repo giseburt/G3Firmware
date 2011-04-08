@@ -93,6 +93,22 @@ int32_t pop32() {
 	return shared.a;
 }
 
+  // Note: Assumes you already checked for enough room!
+int32_t peek32(BufSizeType index) {
+  union {
+	// AVR is little-endian
+	int32_t a;
+	struct {
+	  uint8_t data[4];
+	} b;
+  } shared;
+  shared.b.data[0] = command_buffer[index];
+  shared.b.data[1] = command_buffer[index+1];
+  shared.b.data[2] = command_buffer[index+2];
+  shared.b.data[3] = command_buffer[index+3];
+  return shared.a;
+}
+  
 enum {
 	READY,
 	MOVING,
@@ -113,7 +129,10 @@ void reset() {
 
 // A fast slice for processing commands and refilling the stepper queue, etc.
 void runCommandSlice() {
-	if (sdcard::isPlaying()) {
+  static uint8_t axes_resolved = 0;
+  static BufSizeType lookahead_offset = 0;
+	
+  if (sdcard::isPlaying()) {
 		while (command_buffer.getRemainingCapacity() > 0 && sdcard::playbackHasNext()) {
 			command_buffer.push(sdcard::playbackNext());
 		}
@@ -128,7 +147,31 @@ void runCommandSlice() {
 		}
 	}
 	if (mode == MOVING) {
-		if (!steppers::isRunning()) { mode = READY; }
+		if (!steppers::isRunning()) {
+		  mode = READY;
+		  axes_resolved = 0;
+		  lookahead_offset = 0;
+		} else {
+		  // Look-ahead for deceleration points
+		  while (axes_resolved != 0x1f && command_buffer.getLength() > lookahead_offset) {
+			uint8_t command = command_buffer[lookahead_offset];
+			
+			if (command == HOST_CMD_QUEUE_POINT_EXT && command_buffer.getLength() >= lookahead_offset+25) {
+			  mode = MOVING;
+			  int32_t x = peek32(lookahead_offset+1);
+			  int32_t y = peek32(lookahead_offset+5);
+			  int32_t z = peek32(lookahead_offset+9);
+			  int32_t a = peek32(lookahead_offset+13);
+			  int32_t b = peek32(lookahead_offset+17);
+			  int32_t dda = peek32(lookahead_offset+21);
+			  axes_resolved = steppers::setFutureTarget(Point(x,y,z,a,b),dda);
+			  lookahead_offset+=25;
+			} else {
+			  break;
+			}
+		  }
+		}
+
 	}
 	if (mode == DELAY) {
 		// check timers

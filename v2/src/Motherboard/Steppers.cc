@@ -33,7 +33,7 @@ public:
 	}
 
 	/// Set target coordinate and compute delta
-	void setTarget(const int32_t target_in, bool relative) {
+	void setTarget(const int32_t target_in, const bool relative) {
 		target = target_in;
 		if (relative) {
 			delta = target;
@@ -45,6 +45,8 @@ public:
 		
 		delta = (delta * scale) / 10000;
 		
+		old_direction = direction;
+		
 		direction = true;
 		if (delta != 0) {
 			if (interface != 0)
@@ -53,6 +55,84 @@ public:
 		if (delta < 0) {
 			delta = -delta;
 			direction = false;
+		}
+		
+		first_decel_step = delta;
+		total_delta = delta;
+		resolved = false;
+	}
+	
+	// return the difference from set speed and deceleration limit
+	// accounting for current speed
+	// 0 means accelerating, no change in speed, or the change is < than the deceleration limit
+	void setSpeed(const int32_t us_per_step) {
+		set_speed = us_per_step;
+		
+		// are we being asked to go faster than we steps for?
+		if ((set_speed > 0) /* set speed not stopped  */ 
+			&& (set_speed < ((speed || min_speed) - (max_accel * delta))) /* add will accel more than max per step */
+			)
+		{
+			// set the set_speed to what we can achieve in the time given
+			set_speed = ((speed || min_speed) - (max_accel * delta));
+		}
+#if 0		
+		uint32_t deceleration_overage = 0;
+		// are we decelerating?
+		if ((speed > max_decel) /* we are moving fast enough that we can't just stop */ 
+				&& ((set_speed == 0) /*and will stop*/ || (set_speed > (speed + max_decel)) /* or slow down fast enough */))
+		{
+			// Formula: (set speed or min_speed) - speed
+			return ((set_speed == 0)?min_speed:set_speed) - speed
+		}
+		return 0;
+#endif
+	}
+	
+	void setFutureTargetAndSpeed(const int32_t target_in, const bool relative, const int32_t us_per_step) {
+		int32_t temp_delta = 0;
+		if (relative) {
+			temp_delta = target_in;
+		} else {
+			temp_delta = target_in - target;
+		}
+		
+		temp_delta = (temp_delta * scale) / 10000;
+		
+		bool new_direction = true;
+		if (temp_delta < 0) {
+			temp_delta = -temp_delta;
+			new_direction = false;
+		}
+		
+		// if we aren't moving at the end of the current move, we're done here
+		if (set_speed == 0)
+		{
+			resolved = true;
+			return;
+		}
+		else
+		// if we switch directions, or are set to not move, then we stop at the end of this movement
+		if (temp_delta == 0 || direction != new_direction) {
+			// figure backwards when to start decelerating
+			int32_t steps_to_stop = ((min_speed - set_speed) / max_decel);
+			first_decel_step = total_delta - steps_to_stop;
+		}
+		else
+		// otherwise, we figure out if we have enough steps in this next move to stop
+		{
+			int32_t steps_to_stop = (min_speed - min(set_speed, us_per_step) / max_decel);
+			if (steps_to_stop > temp_delta) {
+				if (steps_to_stop > (total_delta + delta)) {
+					total_delta += temp_delta;
+					resolved = false;
+					return;
+				} else {
+					first_decel_step = steps_to_stop - total_delta - delta;
+					resolved = true;
+				}
+			}
+			// 
 		}
 	}
 
@@ -90,8 +170,16 @@ public:
 		target = 0;
 		counter = 0;
 		delta = 0;
+		total_delta = 0;
 		unscaled_delta = 0;
 		scale = 10000;
+		max_accel = 0;
+		max_decel = 0;
+		direction = old_direction = true;
+		min_speed = 1000000; // one step per second?!
+		set_speed = 0; // 0 == stopped
+		speed = 0; // 0 == stopped
+		first_decel_step = 0;
 	}
 	
 	inline bool atTarget() {
@@ -171,8 +259,26 @@ public:
 	volatile int32_t unscaled_delta;
 	/// True for positive, false for negative
 	volatile bool direction;
+	/// For keeping track of reversals
+	volatile bool old_direction;
 	/// Scale of the axis
 	volatile int32_t scale;
+	/// Do we have enough time to stop?
+	volatile bool resolved;
+	/// The step at which we start decelerating, might be == delta
+	volatile int32_t first_decel_step;
+	/// Total movement, including future moves, until "Resolved"
+	volatile int32_t total_delta;
+	/// Maximum acceleration rate
+	int32_t max_accel;
+	/// Maximum deceleration rate
+	int32_t max_decel;
+	/// Minimum step rate, in µseconds/step. Only for acceleration start.
+	int32_t min_speed;
+	/// Current _set_ speed, in µseconds/step
+	volatile int32_t set_speed;
+	/// Current movement speed, in µseconds/step
+	volatile int32_t speed;
 };
 
 	
@@ -278,9 +384,11 @@ void setTarget(const Point& target, int32_t dda_interval) {
 	// compute number of intervals for this move
 	intervals = max_delta;
 	intervals_remaining = intervals;
+	int32_t total_us = max_delta * dda_interval;
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
+		axes[i].set_speed = total_us / axes[i].delta; // <- this will round, that's ok
 	}
 	
 	ticks_per_step = ticks_left = (axes[FEEDRATE_AXIS].position * feedrate_scale) / INTERVAL_IN_MICROSECONDS;
@@ -319,6 +427,12 @@ void setTargetNew(const Point& target, int32_t us, uint8_t relative) {
 	
 	is_running = true;
 }
+	
+uint8_t setFutureTarget(const Point& target, int32_t dda_interval)
+{
+	int resolved = 0;
+}
+
 
 /// Start homing
 void startHoming(const bool maximums, const uint8_t axes_enabled, const uint32_t us_per_step) {

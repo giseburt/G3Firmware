@@ -43,6 +43,8 @@ void enableAxis(uint8_t which, bool enable);
 	void setAxisScale(uint8_t which, int32_t scale);
 /// Set current target
 void setTarget(const Point& target, int32_t dda_interval);
+/// Set future target
+uint8_t setFutureTarget(const Point& target, int32_t dda_interval);
 /// Set new-style target, with time specified in ms and relative motion
 void setTargetNew(const Point& target, int32_t ms, uint8_t relative =0);
 /// Start homing
