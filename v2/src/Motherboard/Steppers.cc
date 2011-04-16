@@ -21,7 +21,7 @@
 #include <math.h>
 
 #define TICKS_PER_SECOND (1000000.0 / (double)INTERVAL_IN_MICROSECONDS)
-#define ACCELERATE_TICKS_PER_SECOND 125.0
+#define ACCELERATE_TICKS_PER_SECOND 250.0
 #define TICKS_PER_ACCELERATE_TICK (TICKS_PER_SECOND/ACCELERATE_TICKS_PER_SECOND)
 	
 
@@ -107,7 +107,7 @@ public:
 		}
 		
 		first_decel_step = delta;
-		last_accel_step = delta;
+		last_accel_step = 0;
 		total_delta = delta;
 		future_delta = 0;
 		resolved = false;
@@ -129,7 +129,7 @@ public:
 			last_accel_step = estimate_acceleration_distance(speed, set_speed, max_accel);
 			if (last_accel_step > delta) {
 				// set the set_speed to what we can achieve in the time given
-				set_speed = max_allowable_speed(max_accel, set_speed-speed, delta);
+				//set_speed = max_allowable_speed(max_accel, set_speed-speed, delta);
 				last_accel_step = delta;
 			}
 		} else {
@@ -139,7 +139,7 @@ public:
 		
 		// figure a (soft) point to start slowing down, in case we don't get any future points
 		// Example case: jogging from the RepG control panel
-		int32_t steps_to_stop = estimate_acceleration_distance(min_speed, set_speed, max_decel);
+		int32_t steps_to_stop = floor(estimate_acceleration_distance(set_speed, min_speed, -max_decel));
 		first_decel_step = delta - steps_to_stop;
 		
 		if (first_decel_step < last_accel_step) {
@@ -182,8 +182,8 @@ public:
 			
 			if (first_decel_step < last_accel_step) {
 				double distance_to_intersection = delta - intersection_distance(speed, set_speed, max_accel, max_decel, total_delta);
-				last_accel_step = ceil(distance_to_intersection);
-				first_decel_step = floor(distance_to_intersection);
+				last_accel_step = floor(distance_to_intersection);
+				first_decel_step = ceil(distance_to_intersection);
 			}
 			resolved = true;
 		} else {
@@ -202,8 +202,8 @@ public:
 			first_decel_step = total_delta - steps_to_stop;
 			if (first_decel_step < last_accel_step) {
 				double distance_to_intersection = intersection_distance(min_speed, set_speed, max_accel, max_decel, total_delta);
-				last_accel_step = ceil(distance_to_intersection);
-				first_decel_step = floor(distance_to_intersection);
+				last_accel_step = floor(distance_to_intersection);
+				first_decel_step = ceil(distance_to_intersection);
 			}
 			resolved = true;
 		}
@@ -247,8 +247,9 @@ public:
 		future_delta = 0;
 		unscaled_delta = 0;
 		scale = 10000;
-		max_accel = 100000.0;
-		max_decel = 2500.0;
+		// a = (s * s)/(2*d), a = accel, s = max speed, d = distance
+		max_accel = 18800.0;
+		max_decel = 18800.0;
 		min_speed = 94;
 		direction = old_direction = true;
 		set_speed = 0; // 0 == stopped
@@ -382,7 +383,7 @@ volatile int32_t last_accel_step = 0;
 volatile int32_t first_decel_step = 0;
 volatile double accel_rate;
 volatile double decel_rate;
-volatile double min_speed;
+volatile double min_speed, set_speed;
 
 bool isRunning() {
 	return is_running || is_homing;
@@ -477,6 +478,7 @@ void setTarget(const Point& target, int32_t dda_interval) {
 	first_decel_step = axes[master_axis].first_decel_step;
 	accel_rate = axes[master_axis].max_accel / ACCELERATE_TICKS_PER_SECOND;
 	decel_rate = axes[master_axis].max_decel / ACCELERATE_TICKS_PER_SECOND;
+	set_speed = axes[master_axis].set_speed;
 #endif		
 		
 	if (speed < min_speed)
@@ -606,19 +608,7 @@ void setAxisScale(uint8_t which, int32_t scale) {
 
 bool doInterrupt() {
 	if (is_running) {
-
-		if (accelerate_ticks_left-- == 0) {
-			if (current_interval <= last_accel_step) {
-				speed += accel_rate;
-			}
-			else if (current_interval >= first_decel_step) {
-				speed -= decel_rate;
-			}
-			
-			ticks_per_step = (TICKS_PER_SECOND / speed);
-			accelerate_ticks_left = TICKS_PER_ACCELERATE_TICK;
-		}
-		
+		bool took_step = false;		
 		if (ticks_left-- == 0) {
 			if (++current_interval == intervals) {
 				is_running = false;
@@ -641,7 +631,6 @@ bool doInterrupt() {
 						axes[i].speed = 0;
 				}				
 			} else {
-				bool took_step = false;
 				for (int i = 0; i < STEPPER_COUNT; i++) {
 					took_step |= axes[i].doInterrupt(intervals);
 				}
@@ -650,6 +639,27 @@ bool doInterrupt() {
 			}
 		}
 
+		if (accelerate_ticks_left-- == 0) {
+			if (current_interval <= last_accel_step) {
+				if (speed + accel_rate <= set_speed)
+					speed += accel_rate;
+				else
+					speed = set_speed;
+			}
+			else if (current_interval > first_decel_step && speed > decel_rate) {
+				speed -= decel_rate;
+			}
+			else if (speed != set_speed) {
+				speed = set_speed;
+			}
+			
+			ticks_per_step = (TICKS_PER_SECOND / speed);
+			accelerate_ticks_left = TICKS_PER_ACCELERATE_TICK;
+			
+			if (took_step)
+				ticks_left = ticks_per_step;
+		}
+		
 		return is_running;
 
 	} else if (is_homing) {
