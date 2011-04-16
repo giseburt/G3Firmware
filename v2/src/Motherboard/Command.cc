@@ -152,8 +152,9 @@ void runCommandSlice() {
 		  axes_resolved = 0;
 		  lookahead_offset = 0;
 		} else {
+#if 0
 		  // Look-ahead for deceleration points
-		  while (axes_resolved != 0x1f && command_buffer.getLength() > lookahead_offset) {
+		  while (!axes_resolved && command_buffer.getLength() > lookahead_offset) {
 			uint8_t command = command_buffer[lookahead_offset];
 			
 			if (command == HOST_CMD_QUEUE_POINT_EXT && command_buffer.getLength() >= lookahead_offset+25) {
@@ -170,6 +171,7 @@ void runCommandSlice() {
 			  break;
 			}
 		  }
+#endif
 		}
 
 	}

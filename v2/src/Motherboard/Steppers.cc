@@ -18,9 +18,58 @@
 #define __STDC_LIMIT_MACROS
 #include "Steppers.hh"
 #include <stdint.h>
+#include <math.h>
+
+#define TICKS_PER_SECOND (1000000.0 / (double)INTERVAL_IN_MICROSECONDS)
+#define ACCELERATE_TICKS_PER_SECOND 125.0
+#define TICKS_PER_ACCELERATE_TICK (TICKS_PER_SECOND/ACCELERATE_TICKS_PER_SECOND)
+	
 
 namespace steppers {
 
+// The following three functions borrowed from the grbl project:
+// https://github.com/simen/grbl/blob/master/planner.c
+	
+// Calculates the distance (not time) it takes to accelerate from initial_rate to target_rate using the 
+// given acceleration:
+inline double estimate_acceleration_distance(double initial_rate, double target_rate, double acceleration) {
+	return((target_rate*target_rate-initial_rate*initial_rate)/(2L*acceleration));
+}
+
+// Calculates the maximum allowable speed at this point when you must be able to reach target_velocity using the 
+// acceleration within the allotted distance.
+inline double max_allowable_speed(double acceleration, double target_velocity, double distance) {
+	return(sqrt(target_velocity*target_velocity-2*acceleration*distance));
+}
+
+	
+// This function gives you the point at which you must start braking (at the rate of -acceleration) if 
+// you started at speed initial_rate and accelerated until this point and want to end at the final_rate after
+// a total travel of distance. This can be used to compute the intersection point between acceleration and
+// deceleration in the cases where the trapezoid has no plateau (i.e. never reaches maximum speed)
+
+/*                        + <- some maximum rate we don't care about
+                         /|\
+                        / | \                    
+                       /  |  + <- final_rate     
+                      /   |  |                   
+	 initial_rate -> +----+--+                   
+                          ^  ^                   
+                          |  |                   
+						  intersection_distance  distance
+ */
+
+// MODIFIED from grbl source: We use a seperate deceleration rate, so the math was changed accordingly
+// Assumes deceleration is a *posititve* number
+	
+inline double intersection_distance(double initial_rate, double final_rate, double acceleration, double deceleration, double distance) {
+	return(
+		   (2*deceleration*distance-initial_rate*initial_rate+final_rate*final_rate)/
+		   (2*(acceleration+deceleration))
+	      );
+}
+
+// ### END of from grbl
 class Axis {
 public:
 	Axis() : interface(0) {
@@ -58,81 +107,105 @@ public:
 		}
 		
 		first_decel_step = delta;
+		last_accel_step = delta;
 		total_delta = delta;
+		future_delta = 0;
 		resolved = false;
+		
+		if (direction != old_direction || delta == 0)
+			speed = 0;
 	}
 	
-	// return the difference from set speed and deceleration limit
-	// accounting for current speed
-	// 0 means accelerating, no change in speed, or the change is < than the deceleration limit
 	void setSpeed(const int32_t us_per_step) {
-		set_speed = us_per_step;
-		
-		// are we being asked to go faster than we steps for?
-		if ((set_speed > 0) /* set speed not stopped  */ 
-			&& (set_speed < ((speed || min_speed) - (max_accel * delta))) /* add will accel more than max per step */
+		set_speed = 1000000.0/(double)us_per_step;
+				
+		// are we being asked to go faster than we have time for?
+		if ((set_speed > 0) /* set speed not stopped  */
+			&& (set_speed > (speed || min_speed)) // we are accelerating
 			)
 		{
-			// set the set_speed to what we can achieve in the time given
-			set_speed = ((speed || min_speed) - (max_accel * delta));
+			if (speed == 0)
+				speed = min_speed;
+			last_accel_step = estimate_acceleration_distance(speed, set_speed, max_accel);
+			if (last_accel_step > delta) {
+				// set the set_speed to what we can achieve in the time given
+				set_speed = max_allowable_speed(max_accel, set_speed-speed, delta);
+				last_accel_step = delta;
+			}
+		} else {
+			last_accel_step = 0;
 		}
-#if 0		
-		uint32_t deceleration_overage = 0;
-		// are we decelerating?
-		if ((speed > max_decel) /* we are moving fast enough that we can't just stop */ 
-				&& ((set_speed == 0) /*and will stop*/ || (set_speed > (speed + max_decel)) /* or slow down fast enough */))
-		{
-			// Formula: (set speed or min_speed) - speed
-			return ((set_speed == 0)?min_speed:set_speed) - speed
+
+		
+		// figure a (soft) point to start slowing down, in case we don't get any future points
+		// Example case: jogging from the RepG control panel
+		int32_t steps_to_stop = estimate_acceleration_distance(min_speed, set_speed, max_decel);
+		first_decel_step = delta - steps_to_stop;
+		
+		if (first_decel_step < last_accel_step) {
+			double distance_to_intersection = intersection_distance(speed || min_speed, min_speed, max_accel, max_decel, delta);
+			last_accel_step = ceil(distance_to_intersection);
+			first_decel_step = floor(distance_to_intersection);
 		}
-		return 0;
-#endif
 	}
 	
-	void setFutureTargetAndSpeed(const int32_t target_in, const bool relative, const int32_t us_per_step) {
-		int32_t temp_delta = 0;
-		if (relative) {
-			temp_delta = target_in;
-		} else {
-			temp_delta = target_in - target;
-		}
-		
-		temp_delta = (temp_delta * scale) / 10000;
-		
-		bool new_direction = true;
-		if (temp_delta < 0) {
-			temp_delta = -temp_delta;
-			new_direction = false;
-		}
+	
+	void setFutureTarget(const int32_t target_in, const bool relative) {
+		future_delta = 0;
 		
 		// if we aren't moving at the end of the current move, we're done here
 		if (set_speed == 0)
 		{
 			resolved = true;
-			return;
 		}
-		else
+
+		int32_t future_delta = 0;
+		if (relative) {
+			future_delta = target_in;
+		} else {
+			future_delta = target_in - target;
+		}
+		
+		future_delta = (future_delta * scale) / 10000;
+		
+		bool new_direction = true;
+		if (future_delta < 0) {
+			future_delta = -future_delta;
+			new_direction = false;
+		}
+				
 		// if we switch directions, or are set to not move, then we stop at the end of this movement
-		if (temp_delta == 0 || direction != new_direction) {
+		if (future_delta == 0 || direction != new_direction) {
 			// figure backwards when to start decelerating
-			int32_t steps_to_stop = ((min_speed - set_speed) / max_decel);
+			int32_t steps_to_stop = estimate_acceleration_distance(set_speed, speed, max_decel);
 			first_decel_step = total_delta - steps_to_stop;
-		}
-		else
-		// otherwise, we figure out if we have enough steps in this next move to stop
-		{
-			int32_t steps_to_stop = (min_speed - min(set_speed, us_per_step) / max_decel);
-			if (steps_to_stop > temp_delta) {
-				if (steps_to_stop > (total_delta + delta)) {
-					total_delta += temp_delta;
-					resolved = false;
-					return;
-				} else {
-					first_decel_step = steps_to_stop - total_delta - delta;
-					resolved = true;
-				}
+			
+			if (first_decel_step < last_accel_step) {
+				double distance_to_intersection = delta - intersection_distance(speed, set_speed, max_accel, max_decel, total_delta);
+				last_accel_step = ceil(distance_to_intersection);
+				first_decel_step = floor(distance_to_intersection);
 			}
-			// 
+			resolved = true;
+		} else {
+			total_delta += future_delta;
+		}
+	}
+	
+	void setFutureSpeed(const int32_t us_per_step) {
+		double future_set_speed = 1000000.0/(double)us_per_step;
+
+		int32_t steps_to_stop = estimate_acceleration_distance(min_speed, future_set_speed, max_decel);
+		
+		if (steps_to_stop > total_delta) {
+			resolved = false;
+		} else {
+			first_decel_step = total_delta - steps_to_stop;
+			if (first_decel_step < last_accel_step) {
+				double distance_to_intersection = intersection_distance(min_speed, set_speed, max_accel, max_decel, total_delta);
+				last_accel_step = ceil(distance_to_intersection);
+				first_decel_step = floor(distance_to_intersection);
+			}
+			resolved = true;
 		}
 	}
 
@@ -171,15 +244,17 @@ public:
 		counter = 0;
 		delta = 0;
 		total_delta = 0;
+		future_delta = 0;
 		unscaled_delta = 0;
 		scale = 10000;
-		max_accel = 0;
-		max_decel = 0;
+		max_accel = 100000.0;
+		max_decel = 2500.0;
+		min_speed = 94;
 		direction = old_direction = true;
-		min_speed = 1000000; // one step per second?!
 		set_speed = 0; // 0 == stopped
 		speed = 0; // 0 == stopped
 		first_decel_step = 0;
+		last_accel_step = 0;
 	}
 	
 	inline bool atTarget() {
@@ -267,32 +342,47 @@ public:
 	volatile bool resolved;
 	/// The step at which we start decelerating, might be == delta
 	volatile int32_t first_decel_step;
+	/// The step at which we stop accelerating, might be == delta
+	volatile int32_t last_accel_step;
+	/// Future movement
+	volatile int32_t future_delta;
 	/// Total movement, including future moves, until "Resolved"
 	volatile int32_t total_delta;
-	/// Maximum acceleration rate
-	int32_t max_accel;
-	/// Maximum deceleration rate
-	int32_t max_decel;
-	/// Minimum step rate, in µseconds/step. Only for acceleration start.
-	int32_t min_speed;
-	/// Current _set_ speed, in µseconds/step
-	volatile int32_t set_speed;
-	/// Current movement speed, in µseconds/step
-	volatile int32_t speed;
+	/// Maximum acceleration rate, in steps/s^2
+	double max_accel;
+	/// Maximum deceleration rate, ins steps/s^2
+	double max_decel;
+	/// Minimum speed
+	double min_speed;
+	/// Current _set_ speed, in steps/s
+	volatile double set_speed;
+	/// Current movement speed, in steps/s
+	volatile double speed;
+	
 };
 
 	
 volatile bool is_running;
 int32_t intervals;
-volatile int32_t intervals_remaining;
-#define AXIS_COUNT STEPPER_COUNT+1
-// The index of the feedrate axis:
-#define FEEDRATE_AXIS STEPPER_COUNT
+volatile int32_t current_interval;
+#define AXIS_COUNT STEPPER_COUNT
 Axis axes[AXIS_COUNT]; // add a virtal axis for feedrate
+volatile int8_t resolved;
+#define ALL_AXIS_RESOLVED 0x1F
 // To keep from over stepping for the feed rate, we might scale it
 volatile int8_t feedrate_scale;
-volatile int32_t ticks_left, ticks_per_step;
+// Keep track of how many ticks are left in the current step, and how long between steps
+volatile int32_t ticks_left, ticks_per_step, accelerate_ticks_left;
+// Speed is in steps/second
+volatile double speed;
 volatile bool is_homing;
+	
+// These mirror those of the axes, but are overall
+volatile int32_t last_accel_step = 0;
+volatile int32_t first_decel_step = 0;
+volatile double accel_rate;
+volatile double decel_rate;
+volatile double min_speed;
 
 bool isRunning() {
 	return is_running || is_homing;
@@ -304,11 +394,6 @@ void init(Motherboard& motherboard) {
 	for (int i = 0; i < STEPPER_COUNT; i++) {
 		axes[i] = Axis(motherboard.getStepperInterface(i));
 	}
-	// add virual interface for feedrate
-	axes[FEEDRATE_AXIS] = Axis();
-	
-	feedrate_scale=1;
-	// FIXME! This needs to come from a command!
 }
 
 void abort() {
@@ -340,6 +425,8 @@ void setHoldZ(bool holdZ_in) {
 
 void setTarget(const Point& target, int32_t dda_interval) {
 	int32_t max_delta = 0;
+	last_accel_step = 0;
+	int master_axis = 0;
 	for (int i = 0; i < STEPPER_COUNT; i++) {
 		axes[i].setTarget(target[i], false);
 		const int32_t delta = axes[i].delta;
@@ -348,55 +435,60 @@ void setTarget(const Point& target, int32_t dda_interval) {
 		else if (delta != 0) axes[i].enableStepper(true);
 		if (delta > max_delta) {
 			max_delta = delta;
+			first_decel_step = delta;
+			// grab the ending speed of the primary axis as the speed
+			speed = axes[i].speed;
+			min_speed = axes[i].min_speed;
+			master_axis = i;
 		}
 	}
 	
-	// if the feedrate has never been set, use the incoming one
-	if (axes[FEEDRATE_AXIS].position == 0)
-		axes[FEEDRATE_AXIS].position = dda_interval;
-	
-	// undo scaling before setting position
-	axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position * feedrate_scale;
-	feedrate_scale = 1;
-	
-	// To disable interpolation, uncomment this:
-	axes[FEEDRATE_AXIS].position = dda_interval;
-	
-	if (max_delta == 0) {
-		axes[FEEDRATE_AXIS].position = dda_interval;
-		intervals_remaining = 0;
-		is_running = false;
-		return;
-	}
-	
-	// Keep the feedrate scaling from requiring too many steps
-	axes[FEEDRATE_AXIS].setTarget(dda_interval, false);
-	if (axes[FEEDRATE_AXIS].delta > max_delta*3) {
-		feedrate_scale = axes[FEEDRATE_AXIS].delta / max_delta;
-		axes[FEEDRATE_AXIS].position = axes[FEEDRATE_AXIS].position / feedrate_scale;
-		axes[FEEDRATE_AXIS].target = axes[FEEDRATE_AXIS].target / feedrate_scale;
-		axes[FEEDRATE_AXIS].delta = axes[FEEDRATE_AXIS].delta / feedrate_scale;
-	}
-
-	if (axes[FEEDRATE_AXIS].delta > max_delta)
-		max_delta = axes[FEEDRATE_AXIS].delta;
+	resolved = 0;
 	
 	// compute number of intervals for this move
 	intervals = max_delta;
-	intervals_remaining = intervals;
+	current_interval = 0;
 	int32_t total_us = max_delta * dda_interval;
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
-		axes[i].set_speed = total_us / axes[i].delta; // <- this will round, that's ok
+		if (i < STEPPER_COUNT) {
+			if (axes[i].delta == 0) {
+				resolved |= 1 << i;
+				continue;
+			}
+			axes[i].setSpeed(total_us / axes[i].delta); // <- this will round, that's ok
+			resolved |= axes[i].resolved << i;
+#if 0
+			if (axes[i].last_accel_step > last_accel_step) {
+				last_accel_step = axes[i].last_accel_step;
+				accel_rate = axes[i].max_accel / ACCELERATE_TICKS_PER_SECOND;
+			}
+			if (axes[i].first_decel_step < first_decel_step) {
+				first_decel_step = axes[i].first_decel_step;
+				decel_rate = axes[i].max_decel / ACCELERATE_TICKS_PER_SECOND;
+			}			
+#endif
+		}
 	}
-	
-	ticks_per_step = ticks_left = (axes[FEEDRATE_AXIS].position * feedrate_scale) / INTERVAL_IN_MICROSECONDS;
+
+#if 1
+	last_accel_step = axes[master_axis].last_accel_step;
+	first_decel_step = axes[master_axis].first_decel_step;
+	accel_rate = axes[master_axis].max_accel / ACCELERATE_TICKS_PER_SECOND;
+	decel_rate = axes[master_axis].max_decel / ACCELERATE_TICKS_PER_SECOND;
+#endif		
+		
+	if (speed < min_speed)
+		speed = min_speed; // minimum speed
+	ticks_per_step = ticks_left = (TICKS_PER_SECOND / speed);
+	accelerate_ticks_left = TICKS_PER_ACCELERATE_TICK;
 	
 	is_running = true;
 }
 
 void setTargetNew(const Point& target, int32_t us, uint8_t relative) {
+	int32_t max_delta = 0;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].setTarget(target[i], (relative & (1 << i)) != 0);
 		// Only shut z axis on inactivity
@@ -408,35 +500,83 @@ void setTargetNew(const Point& target, int32_t us, uint8_t relative) {
 		}
 		if (delta > max_delta) {
 			max_delta = delta;
+			// grab the ending speed of the primary axis as the speed
+			speed = axes[i].speed;
+			min_speed = axes[i].min_speed;
 		}
 	}
-	
-	// we can't do interpolation here, and we're not going to try
-	axes[FEEDRATE_AXIS].position = us/max_delta;
-	axes[FEEDRATE_AXIS].setTarget(us/max_delta, false);
-	
+		
 	// compute number of intervals for this move
 	intervals = max_delta;
-	intervals_remaining = intervals;
+	current_interval = 0;
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < AXIS_COUNT; i++) {
 		axes[i].counter = negative_half_interval;
+		if (i < STEPPER_COUNT) {
+			if (axes[i].delta == 0) {
+				resolved |= 1 << i;
+				continue;
+			}
+
+			axes[i].setSpeed(us / axes[i].delta); // <- this will round, that's ok
+			resolved |= axes[i].resolved << i;
+
+			if (axes[i].last_accel_step > last_accel_step) {
+				last_accel_step = axes[i].last_accel_step;
+				accel_rate = axes[i].max_accel / ACCELERATE_TICKS_PER_SECOND;
+			}
+			if (axes[i].first_decel_step < first_decel_step) {
+				first_decel_step = axes[i].first_decel_step;
+				decel_rate = axes[i].max_decel / ACCELERATE_TICKS_PER_SECOND;
+			}			
+		}
 	}
 	
-	ticks_per_step = ticks_left = axes[FEEDRATE_AXIS].position / INTERVAL_IN_MICROSECONDS;
+	if (speed < min_speed)
+		speed = min_speed; // minimum speed
+	ticks_per_step = ticks_left = (TICKS_PER_SECOND / speed);
+	accelerate_ticks_left = TICKS_PER_ACCELERATE_TICK;
 	
 	is_running = true;
 }
+
 	
-uint8_t setFutureTarget(const Point& target, int32_t dda_interval)
+	
+bool setFutureTarget(const Point& target, int32_t dda_interval)
 {
-	int resolved = 0;
+	int32_t max_delta = 0;
+	for (int i = 0; i < STEPPER_COUNT; i++) {
+		axes[i].setFutureTarget(target[i], false);
+		const int32_t delta = axes[i].future_delta;
+		if (delta > max_delta) {
+			max_delta = delta;
+		}
+	}
+
+	int32_t total_us = max_delta * dda_interval;
+	for (int i = 0; i < STEPPER_COUNT; i++) {
+		if (!axes[i].resolved)
+			axes[i].setFutureSpeed(total_us / axes[i].delta); // <- this will round, that's ok
+
+		resolved |= axes[i].resolved << i;
+
+		if (axes[i].last_accel_step > last_accel_step) {
+			last_accel_step = axes[i].last_accel_step;
+			accel_rate = axes[i].max_accel / ACCELERATE_TICKS_PER_SECOND;
+		}
+		if (axes[i].first_decel_step < first_decel_step) {
+			first_decel_step = axes[i].first_decel_step;
+			decel_rate = axes[i].max_decel / ACCELERATE_TICKS_PER_SECOND;
+		}
+	}
+	
+	return resolved == ALL_AXIS_RESOLVED;
 }
 
 
 /// Start homing
 void startHoming(const bool maximums, const uint8_t axes_enabled, const uint32_t us_per_step) {
-	intervals_remaining = INT32_MAX;
+	current_interval = 0;
 	intervals = us_per_step / INTERVAL_IN_MICROSECONDS;
 	const int32_t negative_half_interval = -intervals / 2;
 	for (int i = 0; i < STEPPER_COUNT; i++) {
@@ -466,23 +606,52 @@ void setAxisScale(uint8_t which, int32_t scale) {
 
 bool doInterrupt() {
 	if (is_running) {
+
+		if (accelerate_ticks_left-- == 0) {
+			if (current_interval <= last_accel_step) {
+				speed += accel_rate;
+			}
+			else if (current_interval >= first_decel_step) {
+				speed -= decel_rate;
+			}
+			
+			ticks_per_step = (TICKS_PER_SECOND / speed);
+			accelerate_ticks_left = TICKS_PER_ACCELERATE_TICK;
+		}
+		
 		if (ticks_left-- == 0) {
-			if (intervals_remaining-- == 0) {
+			if (++current_interval == intervals) {
 				is_running = false;
+				double max_delta_speed = 0;
+				// first, max_delta_speed is just max_delta
+				for (int i = 0; i < STEPPER_COUNT; i++) {
+					if (max_delta_speed < axes[i].delta) {
+						max_delta_speed = axes[i].delta;
+					}
+				}
+				// now we re-use it to include the speed
+				max_delta_speed *= speed;
+				for (int i = 0; i < STEPPER_COUNT; i++) {
+					if (axes[i].delta == 0 || speed == 0) {
+						axes[i].speed = 0;
+						continue;
+					}
+					axes[i].speed = max_delta_speed / axes[i].delta;
+					if ((axes[i].speed - axes[i].max_decel) < min_speed)
+						axes[i].speed = 0;
+				}				
 			} else {
 				bool took_step = false;
 				for (int i = 0; i < STEPPER_COUNT; i++) {
 					took_step |= axes[i].doInterrupt(intervals);
 				}
-				bool feedrate_stepped = axes[FEEDRATE_AXIS].doInterrupt(intervals);
-				// only if it stepped and the feedrate has changed
-				if (took_step && feedrate_stepped) {
-					ticks_per_step = (axes[FEEDRATE_AXIS].position * feedrate_scale) / INTERVAL_IN_MICROSECONDS;
-				}
+				
 				ticks_left = ticks_per_step;
 			}
 		}
+
 		return is_running;
+
 	} else if (is_homing) {
 		is_homing = false;
 		for (int i = 0; i < STEPPER_COUNT; i++) {
