@@ -69,7 +69,7 @@
 // --- Axis configuration ---
 // Define the number of stepper axes supported by the board.  The axes are
 // denoted by X, Y, Z, A and B.
-#define STEPPER_COUNT 3
+#define STEPPER_COUNT 4
 
 // --- Stepper and endstop configuration ---
 // Pins should be defined for each axis present on the board.  They are denoted
@@ -89,7 +89,7 @@
 // The X minimum endstop pin (active high)
 #define X_MIN_PIN       Pin(PortC,4)
 // The X maximum endstop pin (active high)
-#define X_MAX_PIN       Pin() //NULL
+#define X_MAX_PIN       Pin(PortC,4) //NULL
 
 // The Y stepper step pin (active on rising edge)
 #define Y_STEP_PIN      Pin(PortC,7)
@@ -100,7 +100,7 @@
 // The Y minimum endstop pin (active high)
 #define Y_MIN_PIN       Pin(PortA,6)
 // The Y maximum endstop pin (active high)
-#define Y_MAX_PIN       Pin() //NULL
+#define Y_MAX_PIN       Pin(PortA,6) //NULL
 
 // The Z stepper step pin (active on rising edge)
 #define Z_STEP_PIN      Pin(PortA,4)
@@ -111,7 +111,7 @@
 // The Z minimum endstop pin (active high)
 #define Z_MIN_PIN       Pin(PortA,1)
 // The Z maximum endstop pin (active high)
-#define Z_MAX_PIN       Pin() //NULL
+#define Z_MAX_PIN       Pin(PortA,1) //NULL
 
 // The A stepper step pin (active on rising edge)
 #define A_STEP_PIN      Pin(PortC,5)

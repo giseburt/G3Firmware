@@ -33,12 +33,14 @@ void StepperInterface::setEnabled(bool enabled) {
 }
 
 bool StepperInterface::isAtMaximum() {
+	if (max_pin.isNull()) return false;
 	bool v = max_pin.getValue();
 	if (invert_endstops) v = !v;
 	return v;
 }
 
 bool StepperInterface::isAtMinimum() {
+	if (max_pin.isNull()) return false;
 	bool v = min_pin.getValue();
 	if (invert_endstops) v = !v;
 	return v;
