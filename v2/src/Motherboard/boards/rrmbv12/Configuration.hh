@@ -80,6 +80,9 @@
 // if they are based on the H21LOI, they are not.
 #define DEFAULT_INVERTED_ENDSTOPS 1
 
+// If both ends of the endstops will trigger the same pin, set this to one
+#define SINGLE_SWITCH_ENDSTOPS 1
+
 // The X stepper step pin (active on rising edge)
 #define X_STEP_PIN      Pin(PortD,7)
 // The X direction pin (forward on logic high)
