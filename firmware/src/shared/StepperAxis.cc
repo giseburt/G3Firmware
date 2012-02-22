@@ -68,7 +68,8 @@ void StepperAxis::reset() {
 #endif //SINGLE_SWITCH_ENDSTOPS
 }
 
-
+// moved to inline
+/*
 bool StepperAxis::checkEndstop(const bool isHoming) {
 #if defined(SINGLE_SWITCH_ENDSTOPS) && (SINGLE_SWITCH_ENDSTOPS == 1)
         bool hit_endstop = interface->isAtMinimum();
@@ -109,7 +110,10 @@ bool StepperAxis::checkEndstop(const bool isHoming) {
         return direction ? interface->isAtMaximum() : interface->isAtMinimum();
 #endif
 }
+*/
 
+// moved to inline
+/*
 void StepperAxis::doInterrupt(const int32_t intervals) {
         counter += delta;
 
@@ -124,7 +128,7 @@ void StepperAxis::doInterrupt(const int32_t intervals) {
                 position += step_change;
         }
 }
-
+*/
 
 bool StepperAxis::doHoming(const int32_t intervals) {
         if (delta == 0) return false;

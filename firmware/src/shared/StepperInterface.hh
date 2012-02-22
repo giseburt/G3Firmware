@@ -62,7 +62,7 @@ public:
 	/// Set the value of the step line
         /// \param[in] value True to enable, false to disable. This should be toggled
         ///                  back and fourth to effect stepping.
-	void step(bool value);
+	inline void step(bool value);
 
         /// Enable or disable the stepper motor on this axis
         /// \param[in] True to enable the motor
@@ -70,11 +70,29 @@ public:
 
         /// Check if the maximum endstop has been triggered for this axis.
         /// \return True if the axis has triggered its maximum endstop
-	bool isAtMaximum();
+	inline bool isAtMaximum();
 
         /// Check if the minimum endstop has been triggered for this axis.
         /// \return True if the axis has triggered its minimum endstop
-	bool isAtMinimum();
+	inline bool isAtMinimum();
 };
+
+bool StepperInterface::isAtMaximum() {
+        if (max_pin.isNull()) return false;
+	bool v = max_pin.getValue();
+	if (invert_endstops) v = !v;
+	return v;
+}
+
+bool StepperInterface::isAtMinimum() {
+        if (min_pin.isNull()) return false;
+	bool v = min_pin.getValue();
+	if (invert_endstops) v = !v;
+	return v;
+}
+
+void StepperInterface::step(bool value) {
+	step_pin.setValue(value);
+}
 
 #endif // STEPPERINTERFACE_HH_

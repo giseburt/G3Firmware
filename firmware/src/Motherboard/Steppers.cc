@@ -356,7 +356,7 @@ bool doInterrupt() {
 			} else {
 				// if we are supposed to step too fast, we simulate double-size microsteps
 				feedrate_multiplier = 1;
-				while (timer_counter <= -feedrate_inverted) {
+				while (timer_counter <= -feedrate_inverted && intervals_remaining > feedrate_multiplier) {
 					feedrate_multiplier++;
 					timer_counter += feedrate_inverted;
 				}

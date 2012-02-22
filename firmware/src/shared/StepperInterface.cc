@@ -41,15 +41,18 @@ void StepperInterface::setDirection(bool forward) {
         dir_pin.setValue(forward);
 }
 
-void StepperInterface::step(bool value) {
-	step_pin.setValue(value);
-}
+// moved to inline
+// void StepperInterface::step(bool value) {
+// 	step_pin.setValue(value);
+// }
 
 void StepperInterface::setEnabled(bool enabled) {
 	// The A3982 stepper driver chip has an inverted enable.
 	enable_pin.setValue(!enabled);
 }
 
+// moved to inline
+/*
 bool StepperInterface::isAtMaximum() {
         if (max_pin.isNull()) return false;
 	bool v = max_pin.getValue();
@@ -63,6 +66,7 @@ bool StepperInterface::isAtMinimum() {
 	if (invert_endstops) v = !v;
 	return v;
 }
+*/
 
 void StepperInterface::init(uint8_t idx) {
 	dir_pin.setDirection(true);
