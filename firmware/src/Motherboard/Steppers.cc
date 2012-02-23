@@ -336,10 +336,10 @@ void enableAxis(uint8_t index, bool enable) {
 }
 
 void startRunning() {
-	// if (is_running)
-	// 	return;
-	is_running = true;
-	// getNextMove();
+	if (is_running)
+		return;
+	// is_running = true;
+	getNextMove();
 }
 
 bool doInterrupt() {
@@ -349,9 +349,9 @@ bool doInterrupt() {
 
 		if (timer_counter <= 0) {
 			if ((intervals_remaining -= feedrate_multiplier) <= 0) {
-                                stepperTimingDebugPin.setValue(false);
-				sei(); // allow interrupts again
+				// sei(); // allow interrupts again
 				getNextMove();
+                                stepperTimingDebugPin.setValue(false);
 				return is_running;
 				// is_running = false;
 			} else {
@@ -361,11 +361,12 @@ bool doInterrupt() {
 					feedrate_multiplier++;
 					timer_counter += feedrate_inverted;
 				}
+
+				stepperTimingDebugPin.setValue(false);
+				stepperTimingDebugPin.setValue(true);
 				
 				for (uint8_t i = 0; i < STEPPER_COUNT; i++) {
-					axes[i].checkEndstop(/*isHoming*/ false);
-					axes[i].setStepMultiplier(feedrate_multiplier);
-					axes[i].doInterrupt(intervals);
+					axes[i].doInterrupt(intervals, feedrate_multiplier);
 				}
 				
 				if ((feedrate_steps_remaining-=feedrate_multiplier) <= 0) {
@@ -375,6 +376,9 @@ bool doInterrupt() {
 					prepareFeedrateIntervals();
 				}
 				
+				stepperTimingDebugPin.setValue(false);
+				stepperTimingDebugPin.setValue(true);
+
 				if (feedrate_dirty) {
 					recalcFeedrate();
 				}

@@ -29,7 +29,7 @@
 #define INTERVAL_IN_MICROSECONDS 256
 
 // TICKS_PER_ACCELERATION should be set to that ACCELERATION_TICKS_PER_SECOND is not rounded
-#define TICKS_PER_ACCELERATION   5  // lower is better
+#define TICKS_PER_ACCELERATION   10  // lower is better
 #define ACCELERATION_TICKS_PER_SECOND (1000000/(INTERVAL_IN_MICROSECONDS*TICKS_PER_ACCELERATION))
 
 // The pin that connects to the /PS_ON pin on the PSU header.  This pin switches

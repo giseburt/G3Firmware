@@ -34,14 +34,67 @@
 /// Instantiate static motherboard instance
 Motherboard Motherboard::motherboard;
 
+/// Set up the stepper pins at compile-tim
+StepperInterface Motherboard::stepper[STEPPERS] = {
+	#if STEPPER_COUNT > 0
+	StepperInterface(X_DIR_PIN,
+	                 X_STEP_PIN,
+	                 X_ENABLE_PIN,
+	                 X_MAX_PIN,
+	                 X_MIN_PIN,
+	                 eeprom::AXIS_INVERSION)
+	#endif
+	#if STEPPER_COUNT > 1
+	,StepperInterface(Y_DIR_PIN,
+	                 Y_STEP_PIN,
+	                 Y_ENABLE_PIN,
+	                 Y_MAX_PIN,
+	                 Y_MIN_PIN,
+	                 eeprom::AXIS_INVERSION)
+	#endif
+	#if STEPPER_COUNT > 2
+	,StepperInterface(Z_DIR_PIN,
+	                 Z_STEP_PIN,
+	                 Z_ENABLE_PIN,
+	                 Z_MAX_PIN,
+	                 Z_MIN_PIN,
+	                 eeprom::AXIS_INVERSION)
+	#endif
+	#if STEPPER_COUNT > 3
+	,StepperInterface(A_DIR_PIN,
+	                 A_STEP_PIN,
+	                 A_ENABLE_PIN,
+	                 Pin(),
+	                 Pin(),
+	                 eeprom::AXIS_INVERSION)
+	#endif
+	#if STEPPER_COUNT > 4
+	,StepperInterface(B_DIR_PIN,
+	                 B_STEP_PIN,
+	                 B_ENABLE_PIN,
+	                 Pin(),
+	                 Pin(),
+	                 eeprom::AXIS_INVERSION)
+	#endif	
+};
+
+Pin LiquidCrystal::_data_pins[8] = {
+	LCD_D0_PIN,
+	LCD_D1_PIN,
+	LCD_D2_PIN,
+	LCD_D3_PIN,
+	NullPin,
+	NullPin,
+	NullPin,
+	NullPin,
+}
+Pin &LiquidCrystal::_rs_pin = LCD_RS_PIN; // LOW: command.  HIGH: character.
+Pin &LiquidCrystal::_rw_pin = NullPin; // LOW: write to LCD.  HIGH: read from LCD.
+Pin &LiquidCrystal::_enable_pin = LCD_ENABLE_PIN; // activated by a HIGH pulse.
+
 /// Create motherboard object
 Motherboard::Motherboard() :
-        lcd(LCD_RS_PIN,
-            LCD_ENABLE_PIN,
-            LCD_D0_PIN,
-            LCD_D1_PIN,
-            LCD_D2_PIN,
-            LCD_D3_PIN),
+        lcd(),
         interfaceBoard(buttonArray,
             lcd,
             INTERFACE_FOO_PIN,

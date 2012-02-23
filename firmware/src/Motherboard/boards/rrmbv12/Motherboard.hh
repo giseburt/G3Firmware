@@ -32,7 +32,7 @@ class Motherboard {
 private:
 	const static int STEPPERS = STEPPER_COUNT;
 
-	StepperInterface stepper[STEPPERS];
+	static StepperInterface stepper[STEPPERS];
 
 	PSU psu;
 

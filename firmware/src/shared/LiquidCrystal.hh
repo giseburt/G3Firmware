@@ -47,20 +47,20 @@
 
 class LiquidCrystal {
 public:
-  LiquidCrystal(Pin rs, Pin enable,
-		Pin d0, Pin d1, Pin d2, Pin d3,
-		Pin d4, Pin d5, Pin d6, Pin d7);
-  LiquidCrystal(Pin rs, Pin rw, Pin enable,
-		Pin d0, Pin d1, Pin d2, Pin d3,
-		Pin d4, Pin d5, Pin d6, Pin d7);
-  LiquidCrystal(Pin rs, Pin rw, Pin enable,
-		Pin d0, Pin d1, Pin d2, Pin d3);
-  LiquidCrystal(Pin rs, Pin enable,
-		Pin d0, Pin d1, Pin d2, Pin d3);
+  // LiquidCrystal(Pin &rs, Pin &enable,
+  // 		Pin &d0, Pin &d1, Pin &d2, Pin &d3,
+  // 		Pin &d4, Pin &d5, Pin &d6, Pin &d7);
+  // LiquidCrystal(Pin &rs, Pin &rw, Pin &enable,
+  // 		Pin &d0, Pin &d1, Pin &d2, Pin &d3,
+  // 		Pin &d4, Pin &d5, Pin &d6, Pin &d7);
+  // LiquidCrystal(Pin &rs, Pin &rw, Pin &enable,
+  // 		Pin &d0, Pin &d1, Pin &d2, Pin &d3);
+  // LiquidCrystal(Pin &rs, Pin &enable,
+  // 		Pin &d0, Pin &d1, Pin &d2, Pin &d3);
 
-  void init(uint8_t fourbitmode, Pin rs, Pin rw, Pin enable,
-	    Pin d0, Pin d1, Pin d2, Pin d3,
-	    Pin d4, Pin d5, Pin d6, Pin d7);
+  LiquidCrystal();
+
+  void init(uint8_t fourbitmode);
     
   void begin(uint8_t cols, uint8_t rows, uint8_t charsize = LCD_5x8DOTS);
 
@@ -93,16 +93,17 @@ public:
 
   void command(uint8_t);
 
+  static Pin _data_pins[8];
+  static Pin &_rs_pin; // LOW: command.  HIGH: character.
+  static Pin &_rw_pin; // LOW: write to LCD.  HIGH: read from LCD.
+  static Pin &_enable_pin; // activated by a HIGH pulse.
+
 private:
   void send(uint8_t, bool);
   void write4bits(uint8_t);
   void write8bits(uint8_t);
   void pulseEnable();
 
-  Pin _rs_pin; // LOW: command.  HIGH: character.
-  Pin _rw_pin; // LOW: write to LCD.  HIGH: read from LCD.
-  Pin _enable_pin; // activated by a HIGH pulse.
-  Pin _data_pins[8];
 
   uint8_t _displayfunction;
   uint8_t _displaycontrol;

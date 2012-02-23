@@ -867,9 +867,9 @@ namespace planner {
 		planner_recalculate();
 
 		// if we fill the buffer, start moving!
-		if (block_buffer.getUsedCount() > 1) {
+		// if (block_buffer.getUsedCount() > 1) {
 			steppers::startRunning();
-		}
+		// }
 		
 		// stepperTimingDebugPin.setValue(false);
 		return true;
@@ -877,7 +877,7 @@ namespace planner {
 	
 	void markLastMoveCommand() {
 		// if they're already running, this does no harm
-		steppers::startRunning();
+		//steppers::startRunning();
 	}
 	
 	void startHoming(const bool maximums,

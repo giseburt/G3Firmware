@@ -9,8 +9,8 @@ StepperAxis::StepperAxis(StepperInterface& stepper_interface) : interface(&stepp
 }
 
 void StepperAxis::setStepMultiplier(const int8_t new_multiplier) {
-        step_multiplier = new_multiplier;
-        step_change = direction ? step_multiplier : -step_multiplier;
+        // step_multiplier = new_multiplier;
+        // step_change = direction ? step_multiplier : -step_multiplier;
 }
 
 
@@ -26,7 +26,7 @@ void StepperAxis::setTarget(const int32_t target_in, bool relative) {
         if (delta != 0) {
                 interface->setEnabled(true);
         }
-	step_multiplier = 1;
+	// step_multiplier = 1;
         if (delta < 0) {
                 delta = -delta;
                 direction = false;
@@ -60,9 +60,8 @@ void StepperAxis::reset() {
         target = 0;
         counter = 0;
         delta = 0;
-        step_multiplier = 1;
+        // step_multiplier = 1;
         step_change = 1;
-	hit_endstop = false;
 #if defined(SINGLE_SWITCH_ENDSTOPS) && (SINGLE_SWITCH_ENDSTOPS == 1)
         endstop_play = ENDSTOP_DEFAULT_PLAY;
         endstop_status = ESS_UNKNOWN;
@@ -71,7 +70,7 @@ void StepperAxis::reset() {
 
 bool StepperAxis::checkEndstop(const bool isHoming) {
 #if defined(SINGLE_SWITCH_ENDSTOPS) && (SINGLE_SWITCH_ENDSTOPS == 1)
-        hit_endstop = interface->isAtMinimum();
+        bool hit_endstop = interface->isAtMinimum();
   // We must move at least ENDSTOP_DEBOUNCE from where we hit the endstop before we declare traveling
         if (hit_endstop || (endstop_status == (direction?ESS_AT_MAXIMUM:ESS_AT_MINIMUM) && (endstop_play < ENDSTOP_DEFAULT_PLAY - ENDSTOP_DEBOUNCE))) {
                 hit_endstop = true;
@@ -112,34 +111,53 @@ bool StepperAxis::checkEndstop(const bool isHoming) {
 }
 
 // moved to inline
-void StepperAxis::doInterrupt(const int32_t intervals) {
+void StepperAxis::doInterrupt(const int32_t &intervals, const int32_t &step_multiplier) {
 	bool hit_endstop = checkEndstop(false);
+	
+	// make a local copies volatiles
+	int32_t counter_local = counter; // we have to push this back after! 
+	int32_t position_local = position; // we have to push this back after! 
+	const int8_t step_change_local = step_change;
+	const int32_t delta_local = delta;
+	const int32_t intervals_local = intervals;
+	
 	if (!hit_endstop) {
 		for (int8_t steps = step_multiplier; steps > 0; steps--) {
-			counter += delta;
+			counter_local += delta_local;
 
-			if (counter >= 0) {
-				counter -= intervals;
+			if (counter_local >= 0) {
+				counter_local -= intervals_local;
 				interface->step(true);
 				interface->step(false);
+				position_local += step_change_local;
+			}
+		}
+	} else {
+		// looks like a waste, duplicating like this, but we to keep this loop tight
+		for (int8_t steps = step_multiplier; steps > 0; steps--) {
+			counter_local += delta_local;
+
+			if (counter_local >= 0) {
+				counter_local -= intervals_local;
+				position_local += step_change_local;
 			}
 		}
 	}
-	position += step_change;
+	
+	// push the possibly-changed locals back out
+	counter = counter_local;
+	position = position_local;
 }
 
-bool StepperAxis::doHoming(const int32_t intervals) {
+bool StepperAxis::doHoming(const int32_t &intervals) {
         if (delta == 0) return false;
         counter += delta;
         if (counter >= 0) {
                 counter -= intervals;
                 bool hit_endstop = checkEndstop(true);
                 if (!hit_endstop) {
-                        // we honor the step multiplier here, but it *really* should be 1 for homing
-                        for (int8_t steps = step_multiplier; steps > 0; steps--) {
-                                interface->step(true);
-                                interface->step(false);
-                        }
+                        interface->step(true);
+                        interface->step(false);
                 } else {
                         return false;
                 }

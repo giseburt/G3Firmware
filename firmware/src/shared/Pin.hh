@@ -8,15 +8,19 @@
 class Pin {
 private:
         AvrPort port;
-        uint8_t pin_index : 4;
+        const uint8_t pin_index;
+        const uint8_t pin_mask;
+        const uint8_t pin_mask_inverted;
 public:
-        Pin() : port(AvrPort()), pin_index(0) {}
-        Pin(AvrPort& port_in, uint8_t pin_index_in) : port(port_in), pin_index(pin_index_in) {}
-        bool isNull() { return port.isNull(); }
-        void setDirection(bool out) { port.setPinDirection(pin_index,out); }
-        bool getValue() { return port.getPin(pin_index); }
-        void setValue(bool on) { port.setPin(pin_index,on); }
+        Pin() : port(AvrPort()), pin_index(0), pin_mask(0), pin_mask_inverted(0xff) {}
+        Pin(AvrPort& port_in, uint8_t pin_index_in) : port(port_in), pin_index(pin_index_in), pin_mask(_BV(pin_index_in)), pin_mask_inverted(~_BV(pin_index_in)) {}
+        bool isNull() const { return port.isNull(); }
+        void setDirection(bool out) const { port.setPinDirection(pin_mask,out); }
+        bool getValue() const { return port.getPin(pin_mask); }
+        void setValue(bool on) const { on ? port.setPinOn(pin_mask) : port.setPinOff(pin_mask_inverted); }
         const uint8_t getPinIndex() const { return pin_index; }
 };
+
+static const Pin NullPin;
 
 #endif // PIN_HH

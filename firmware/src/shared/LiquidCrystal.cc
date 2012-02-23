@@ -23,49 +23,33 @@
 // can't assume that its in that state when a sketch starts (and the
 // LiquidCrystal constructor is called).
 
-LiquidCrystal::LiquidCrystal(Pin rs, Pin rw, Pin enable,
-			     Pin d0, Pin d1, Pin d2, Pin d3,
-			     Pin d4, Pin d5, Pin d6, Pin d7)
+// LiquidCrystal::LiquidCrystal(Pin rs, Pin rw, Pin enable,
+// 			     Pin d0, Pin d1, Pin d2, Pin d3,
+// 			     Pin d4, Pin d5, Pin d6, Pin d7)
+// {
+//   init(0, rs, rw, enable, d0, d1, d2, d3, d4, d5, d6, d7);
+// }
+// 
+// LiquidCrystal::LiquidCrystal(Pin rs, Pin enable,
+// 			     Pin d0, Pin d1, Pin d2, Pin d3,
+// 			     Pin d4, Pin d5, Pin d6, Pin d7)
+// {
+//   init(0, rs, NullPin, enable, d0, d1, d2, d3, d4, d5, d6, d7);
+// }
+// 
+// LiquidCrystal::LiquidCrystal(Pin rs, Pin rw, Pin enable,
+// 			     Pin d0, Pin d1, Pin d2, Pin d3)
+// {
+//   init(1, rs, rw, enable, d0, d1, d2, d3, NullPin, NullPin, NullPin, NullPin);
+// }
+
+LiquidCrystal::LiquidCrystal()
 {
-  init(0, rs, rw, enable, d0, d1, d2, d3, d4, d5, d6, d7);
+  init(1);
 }
 
-LiquidCrystal::LiquidCrystal(Pin rs, Pin enable,
-			     Pin d0, Pin d1, Pin d2, Pin d3,
-			     Pin d4, Pin d5, Pin d6, Pin d7)
+void LiquidCrystal::init(uint8_t fourbitmode)
 {
-  init(0, rs, Pin(), enable, d0, d1, d2, d3, d4, d5, d6, d7);
-}
-
-LiquidCrystal::LiquidCrystal(Pin rs, Pin rw, Pin enable,
-			     Pin d0, Pin d1, Pin d2, Pin d3)
-{
-  init(1, rs, rw, enable, d0, d1, d2, d3, Pin(), Pin(), Pin(), Pin());
-}
-
-LiquidCrystal::LiquidCrystal(Pin rs,  Pin enable,
-			     Pin d0, Pin d1, Pin d2, Pin d3)
-{
-  init(1, rs, Pin(), enable, d0, d1, d2, d3, Pin(), Pin(), Pin(), Pin());
-}
-
-void LiquidCrystal::init(uint8_t fourbitmode, Pin rs, Pin rw, Pin enable,
-			 Pin d0, Pin d1, Pin d2, Pin d3,
-			 Pin d4, Pin d5, Pin d6, Pin d7)
-{
-  _rs_pin = rs;
-  _rw_pin = rw;
-  _enable_pin = enable;
-  
-  _data_pins[0] = d0;
-  _data_pins[1] = d1;
-  _data_pins[2] = d2;
-  _data_pins[3] = d3; 
-  _data_pins[4] = d4;
-  _data_pins[5] = d5;
-  _data_pins[6] = d6;
-  _data_pins[7] = d7; 
-
   _rs_pin.setDirection(true);
   // we can save 1 pin by not using RW. Indicate by passing 255 instead of pin#
   if (!_rw_pin.isNull()) { _rw_pin.setDirection(true); }
