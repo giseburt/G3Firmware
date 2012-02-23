@@ -68,7 +68,7 @@
 /// \ingroup HardwareLibraries
 class AvrPort {
 private:
-	port_base_t port_base;
+	const port_base_t port_base;
 public:
         AvrPort() :
 	    port_base(NULL_PORT) {};
@@ -78,15 +78,18 @@ public:
         bool isNull() const {
 	    return port_base == NULL_PORT;
 	};
-        void setPinDirection(uint8_t pin_mask, bool out) const {
-	        DDRx = (DDRx & ~pin_mask) | (out?pin_mask:0);
+        void setPinDirectionOut(uint8_t pin_mask) const {
+	        DDRx = (DDRx | pin_mask);
+	};
+        void setPinDirectionIn(uint8_t pin_mask_inverted) const {
+	        DDRx = (DDRx & pin_mask_inverted);
 	};
         bool getPin(uint8_t pin_mask) const {
 	        return (PINx & pin_mask) != 0;
 	};
-        void setPin(uint8_t pin_index, bool on) const {
-	        PORTx = (PORTx & ~_BV(pin_index)) | (on?_BV(pin_index):0);
-	};
+	//         void setPin(uint8_t pin_index, bool on) const {
+	//         PORTx = (PORTx & ~_BV(pin_index)) | (on?_BV(pin_index):0);
+	// };
         void setPinOn(uint8_t pin_mask) const {
 	        PORTx = PORTx | pin_mask;
 	};

@@ -153,11 +153,13 @@ void UART::send_byte(char data) {
 inline void listen() {
 //        TX_ENABLE_PIN.setValue(false);
     TX_ENABLE_PIN.setValue(false);
+    _delay_us(4); // we made it 4ms faster...
 }
 
 // Transition to a transmitting state
 inline void speak() {
     TX_ENABLE_PIN.setValue(true);
+    _delay_us(4); // we made it 4ms faster...
 }
 
 UART::UART(uint8_t index, communication_mode mode) :
@@ -200,6 +202,7 @@ void UART::enable(bool enabled) {
                 TX_ENABLE_PIN.setDirection(true);
                 RX_ENABLE_PIN.setDirection(true);
                 RX_ENABLE_PIN.setValue(false);  // Active low
+                _delay_us(4); // we made it 4ms faster...
                 listen();
 
                 loopback_bytes = 0;

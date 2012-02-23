@@ -126,10 +126,10 @@ void StepperAxis::doInterrupt(const int32_t &intervals, const int32_t &step_mult
 			counter_local += delta_local;
 
 			if (counter_local >= 0) {
-				counter_local -= intervals_local;
 				interface->step(true);
-				interface->step(false);
+				counter_local -= intervals_local;
 				position_local += step_change_local;
+				interface->step(false);
 			}
 		}
 	} else {
