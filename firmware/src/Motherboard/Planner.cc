@@ -404,14 +404,14 @@ namespace planner {
 		}
 
 		ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {  // Fill variables used by the stepper in a critical section
-			// if(!(flags & Block::Busy)) {
+			if(!(flags & Block::Busy)) {
 				accelerate_until = accelerate_steps;
 				decelerate_after = accelerate_steps+plateau_steps;
 				initial_rate     = local_initial_rate;
 				final_rate       = local_final_rate;
-			// }
-			if(flags & Block::Busy)
-				steppers::currentBlockChanged();
+			}
+			// if(flags & Block::Busy)
+			// 	steppers::currentBlockChanged(this);
 		} // ISR state will be automatically restored here
 
 		// stepperTimingDebugPin.setValue(false);
@@ -459,7 +459,7 @@ namespace planner {
 			// If entry speed is already at the maximum entry speed, no need to recheck. Block is cruising.
 			// If not, block in state of acceleration or deceleration. Reset entry speed to maximum and
 			// check for maximum allowable speed reductions to ensure maximum possible planned speed.
-			if (current->entry_speed != current->max_entry_speed) {
+			if (current->entry_speed != current->max_entry_speed && !current->flags & Block::Busy) {
 				// If nominal length true, max junction speed is guaranteed to be reached. Only compute
 				// for max allowable speed if block is decelerating and nominal length is false.
 				if ((!(current->flags & Block::NominalLength)) && (current->max_entry_speed == next->entry_speed)) {
@@ -502,13 +502,14 @@ namespace planner {
 		// However, if it *is* too late, then we need to fix the current entry speed.
 		if (previous->flags & Block::Busy && current->flags & Block::Recalculate) {
 			// stepperTimingDebugPin.setValue(true);
+#if 0
 			uint32_t current_step = steppers::getCurrentStep();
 			uint32_t current_feedrate = steppers::getCurrentFeedrate();
 			// current_feedrate is in steps/second, but entry_speed is in mm/s
 			// use the ratio of nominal_speed/nominal_rate to figure the current speed
 			float current_speed = ((float)current_feedrate * previous->nominal_speed)/(float)previous->nominal_rate;
 			
-			// adjust the previous block to just cover the space left, and firect recalculation
+			// adjust the previous block to just cover the space left, and indicate recalculation
 			previous->entry_speed = previous->max_entry_speed = current_speed;
 			
 			// Recalculate the length of the movement -- for acceleration only.
@@ -518,6 +519,8 @@ namespace planner {
 			// assume it's not nominal length, to be safe
 			previous->flags &= ~Block::NominalLength;
 			// stepperTimingDebugPin.setValue(false);
+#endif
+			current->entry_speed = minimum_planner_speed;
 		}
 
 		// If the previous block is an acceleration block, but it is not long enough to complete the
@@ -862,13 +865,21 @@ namespace planner {
 		block_buffer.bumpHead();
 
 		planner_recalculate();
-		
-		steppers::startRunning();
+
+		// if we fill the buffer, start moving!
+		if (block_buffer.getUsedCount() > 1) {
+			steppers::startRunning();
+		}
 		
 		// stepperTimingDebugPin.setValue(false);
 		return true;
 	}
-
+	
+	void markLastMoveCommand() {
+		// if they're already running, this does no harm
+		steppers::startRunning();
+	}
+	
 	void startHoming(const bool maximums,
 	                 const uint8_t axes_enabled,
 	                 const uint32_t us_per_step)

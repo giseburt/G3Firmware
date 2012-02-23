@@ -169,13 +169,18 @@ void runCommandSlice() {
 	}
 	if (mode == MOVING) {
 		if (!steppers::isRunning()) {
+			// Note that isRunning checks to make sure the plan is empty
 			mode = READY;
 		} else {
 			if (command_buffer.getLength() > 0) {
 				uint8_t command = command_buffer[0];
 				if (command == HOST_CMD_QUEUE_POINT_EXT || command == HOST_CMD_QUEUE_POINT_NEW) {
 					handleMovementCommand(command);
+				} else {
+					planner::markLastMoveCommand();
 				}
+			} else {
+				planner::markLastMoveCommand();
 			}
 		}
 	}

@@ -22,6 +22,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <avr/interrupt.h> // sei()
 
 namespace steppers {
 
@@ -42,21 +43,21 @@ volatile int8_t  feedrate_dirty; // indicates if the feedrate_inverted needs rec
 volatile int32_t feedrate_inverted;
 volatile int32_t feedrate_changerate;
 volatile int32_t acceleration_tick_counter;
-volatile int32_t feedrate_multiplier; // should always be 2^N and > 0
+volatile int8_t feedrate_multiplier; // should always be 2^N and > 0
 volatile uint8_t current_feedrate_index;
 
 volatile int32_t timer_counter;
 StepperAxis axes[STEPPER_COUNT];
 volatile bool is_homing;
 
-// Pin stepperTimingDebugPin = STEPPER_TIMER_DEBUG;
+Pin stepperTimingDebugPin = STEPPER_TIMER_DEBUG;
 
 bool holdZ = false;
 
 planner::Block *current_block;
 
 bool isRunning() {
-	return is_running || is_homing;
+	return is_running || is_homing || !planner::isBufferEmpty();
 }
 
 //public:
@@ -85,8 +86,8 @@ void init(Motherboard& motherboard) {
 	acceleration_tick_counter = 0;
 	current_feedrate_index = 0;
 	
-	// stepperTimingDebugPin.setDirection(true);
-	// stepperTimingDebugPin.setValue(false);
+	stepperTimingDebugPin.setDirection(true);
+	stepperTimingDebugPin.setValue(false);
 }
 
 void abort() {
@@ -257,7 +258,7 @@ bool getNextMove() {
 	return true;
 }
 
-void currentBlockChanged() {
+void currentBlockChanged(const planner::Block *block_check) {
 	// stepperTimingDebugPin.setValue(true);
 	// If we are here, then we are moving AND the interrupts are frozen, so get out *fast*
 
@@ -335,22 +336,22 @@ void enableAxis(uint8_t index, bool enable) {
 }
 
 void startRunning() {
-	if (is_running)
-		return;
-	// is_running = true;
-	getNextMove();
+	// if (is_running)
+	// 	return;
+	is_running = true;
+	// getNextMove();
 }
-
 
 bool doInterrupt() {
 	if (is_running) {
-                // stepperTimingDebugPin.setValue(true);
+                stepperTimingDebugPin.setValue(true);
 		timer_counter -= INTERVAL_IN_MICROSECONDS;
 
 		if (timer_counter <= 0) {
 			if ((intervals_remaining -= feedrate_multiplier) <= 0) {
+                                stepperTimingDebugPin.setValue(false);
+				sei(); // allow interrupts again
 				getNextMove();
-                                // stepperTimingDebugPin.setValue(false);
 				return is_running;
 				// is_running = false;
 			} else {
@@ -360,8 +361,9 @@ bool doInterrupt() {
 					feedrate_multiplier++;
 					timer_counter += feedrate_inverted;
 				}
-	
-				for (int i = 0; i < STEPPER_COUNT; i++) {
+				
+				for (uint8_t i = 0; i < STEPPER_COUNT; i++) {
+					axes[i].checkEndstop(/*isHoming*/ false);
 					axes[i].setStepMultiplier(feedrate_multiplier);
 					axes[i].doInterrupt(intervals);
 				}
@@ -396,7 +398,7 @@ bool doInterrupt() {
 
 		}
 		
-                // stepperTimingDebugPin.setValue(false);
+                stepperTimingDebugPin.setValue(false);
 		return is_running;
 	} else if (is_homing) {
 		is_homing = false;

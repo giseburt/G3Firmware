@@ -62,17 +62,16 @@ void StepperAxis::reset() {
         delta = 0;
         step_multiplier = 1;
         step_change = 1;
+	hit_endstop = false;
 #if defined(SINGLE_SWITCH_ENDSTOPS) && (SINGLE_SWITCH_ENDSTOPS == 1)
         endstop_play = ENDSTOP_DEFAULT_PLAY;
         endstop_status = ESS_UNKNOWN;
 #endif //SINGLE_SWITCH_ENDSTOPS
 }
 
-// moved to inline
-/*
 bool StepperAxis::checkEndstop(const bool isHoming) {
 #if defined(SINGLE_SWITCH_ENDSTOPS) && (SINGLE_SWITCH_ENDSTOPS == 1)
-        bool hit_endstop = interface->isAtMinimum();
+        hit_endstop = interface->isAtMinimum();
   // We must move at least ENDSTOP_DEBOUNCE from where we hit the endstop before we declare traveling
         if (hit_endstop || (endstop_status == (direction?ESS_AT_MAXIMUM:ESS_AT_MINIMUM) && (endstop_play < ENDSTOP_DEFAULT_PLAY - ENDSTOP_DEBOUNCE))) {
                 hit_endstop = true;
@@ -107,28 +106,27 @@ bool StepperAxis::checkEndstop(const bool isHoming) {
         prev_direction = direction;
         return hit_endstop;
 #else
-        return direction ? interface->isAtMaximum() : interface->isAtMinimum();
+	hit_endstop = direction ? interface->isAtMaximum() : interface->isAtMinimum();
+        return hit_endstop;
 #endif
 }
-*/
 
 // moved to inline
-/*
 void StepperAxis::doInterrupt(const int32_t intervals) {
-        counter += delta;
+	bool hit_endstop = checkEndstop(false);
+	if (!hit_endstop) {
+		for (int8_t steps = step_multiplier; steps > 0; steps--) {
+			counter += delta;
 
-        if (counter >= 0) {
-                counter -= intervals;
-                bool hit_endstop = checkEndstop(false);
-                if (!hit_endstop)
-                        for (int8_t steps = step_multiplier; steps > 0; steps--) {
-                                interface->step(true);
-                                interface->step(false);
-                        }
-                position += step_change;
-        }
+			if (counter >= 0) {
+				counter -= intervals;
+				interface->step(true);
+				interface->step(false);
+			}
+		}
+	}
+	position += step_change;
 }
-*/
 
 bool StepperAxis::doHoming(const int32_t intervals) {
         if (delta == 0) return false;
