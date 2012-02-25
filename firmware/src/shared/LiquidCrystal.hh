@@ -94,9 +94,9 @@ public:
   void command(uint8_t);
 
   static Pin _data_pins[8];
-  static Pin &_rs_pin; // LOW: command.  HIGH: character.
-  static Pin &_rw_pin; // LOW: write to LCD.  HIGH: read from LCD.
-  static Pin &_enable_pin; // activated by a HIGH pulse.
+  static Pin _rs_pin; // LOW: command.  HIGH: character.
+  static Pin _rw_pin; // LOW: write to LCD.  HIGH: read from LCD.
+  static Pin _enable_pin; // activated by a HIGH pulse.
 
 private:
   void send(uint8_t, bool);

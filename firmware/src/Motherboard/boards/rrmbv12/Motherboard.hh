@@ -30,9 +30,7 @@
 /// \ingroup MBv12
 class Motherboard {
 private:
-	const static int STEPPERS = STEPPER_COUNT;
-
-	static StepperInterface stepper[STEPPERS];
+	static StepperInterface stepper[STEPPER_COUNT];
 
 	PSU psu;
 

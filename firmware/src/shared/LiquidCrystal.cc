@@ -43,6 +43,7 @@
 //   init(1, rs, rw, enable, d0, d1, d2, d3, NullPin, NullPin, NullPin, NullPin);
 // }
 
+
 LiquidCrystal::LiquidCrystal()
 {
   init(1);

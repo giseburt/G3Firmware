@@ -105,7 +105,7 @@ bool StepperAxis::checkEndstop(const bool isHoming) {
         prev_direction = direction;
         return hit_endstop;
 #else
-	hit_endstop = direction ? interface->isAtMaximum() : interface->isAtMinimum();
+	bool hit_endstop = direction ? interface->isAtMaximum() : interface->isAtMinimum();
         return hit_endstop;
 #endif
 }
