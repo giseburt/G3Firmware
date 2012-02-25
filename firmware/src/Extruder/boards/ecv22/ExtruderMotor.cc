@@ -35,8 +35,8 @@ int16_t stepper_accumulator;
 uint8_t stepper_phase;
 
 bool swap_motor = false;
-Pin motor_enable_pin = HB1_ENABLE_PIN;
-Pin motor_dir_pin = HB1_DIR_PIN;
+Pin *motor_enable_pin = &HB1_ENABLE_PIN;
+Pin *motor_dir_pin = &HB1_DIR_PIN;
 
 Pin external_enable_pin = ES_ENABLE_PIN;
 Pin external_dir_pin = ES_DIR_PIN;
@@ -67,8 +67,8 @@ void initExtruderMotor() {
 	uint16_t ef = getEeprom16(EXTRA_FEATURES,EF_DEFAULT);
 	if ((ef & EF_SWAP_MOTOR_CONTROLLERS) != 0) {
 		swap_motor = true;
-		motor_enable_pin = HB2_ENABLE_PIN;
-		motor_dir_pin = HB2_DIR_PIN;
+		motor_enable_pin = &HB2_ENABLE_PIN;
+		motor_dir_pin = &HB2_DIR_PIN;
 	}
 }
 
@@ -116,12 +116,12 @@ void setExtruderMotor(int16_t speed) {
 			TIMSK0 = 0;
 			if (speed == 0) {
 				TCCR0A = _BV(WGM01) | _BV(WGM00);
-				motor_enable_pin.setValue(false);
+				motor_enable_pin->setValue(false);
 			} else if (speed == 255) {
 				TCCR0A = _BV(WGM01) | _BV(WGM00);
-				motor_enable_pin.setValue(true);
+				motor_enable_pin->setValue(true);
 			} else {
-				motor_enable_pin.setValue(true);
+				motor_enable_pin->setValue(true);
 				if (swap_motor) {
 					TCCR0A = _BV(COM0A1) | _BV(WGM01) | _BV(WGM00);
 				} else {
@@ -131,7 +131,7 @@ void setExtruderMotor(int16_t speed) {
 			bool backwards = speed < 0;
 			if (backwards) { speed = -speed; }
 			if (speed > 255) { speed = 255; }
-			motor_dir_pin.setValue(!backwards);
+			motor_dir_pin->setValue(!backwards);
 			if (swap_motor) {
 				OCR0A = speed;
 			} else {

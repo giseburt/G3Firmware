@@ -31,7 +31,7 @@
 Motherboard Motherboard::motherboard(PSU_PIN);
 
 /// Set up the stepper pins at compile-tim
-StepperInterface Motherboard::stepper[STEPPERS] = {
+StepperInterface Motherboard::stepper[STEPPER_COUNT] = {
 	#if STEPPER_COUNT > 0
 	StepperInterface(X_DIR_PIN,
 	                 X_STEP_PIN,
