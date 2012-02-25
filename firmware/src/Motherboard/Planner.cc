@@ -74,12 +74,10 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h> // for memmove and memcpy
+#include "SDCard.hh" // sdcard::isPlaying()
 
 #include "Steppers.hh"
 #include "Point.hh"
-
-// Give the processor some time to breathe and plan...
-#define MIN_MS_PER_SEGMENT 12000
 
 #define X_AXIS 0
 #define Y_AXIS 1
@@ -212,7 +210,7 @@ namespace planner {
 		}
 		
 		inline BufSizeType getUsedCount() {
-			return full ? size : ((head-tail+size) & size_mask);
+			return full ? size-1 : ((head-tail+size) & size_mask);
 		}
 		
 		inline void clear() {
@@ -500,7 +498,7 @@ namespace planner {
 		// We have to be careful here, but we want to try to smooth out the movement if it's not too late.
 		// That smoothing will happen in Block::calculate_trapezoid later.
 		// However, if it *is* too late, then we need to fix the current entry speed.
-		if (previous->flags & Block::Busy && current->flags & Block::Recalculate) {
+		if (previous->flags & Block::Busy && previous->flags & Block::PlannedToStop && current->flags & Block::Recalculate) {
 			// stepperTimingDebugPin.setValue(true);
 #if 0
 			uint32_t current_step = steppers::getCurrentStep();
@@ -575,7 +573,9 @@ namespace planner {
 				if ((current->flags & Block::Recalculate) || (next->flags & Block::Recalculate)) {
 					// NOTE: Entry and exit factors always > 0 by all previous logic operations.
 					current->calculate_trapezoid(next->entry_speed);
-					current->flags &= ~Block::Recalculate; // Reset current only to ensure next trapezoid is computed
+					// Reset current only to ensure next trapezoid is computed
+					// Also make sure the PlannedToStop flag gets cleared, since we are planning to the next move
+					current->flags &= ~(Block::Recalculate|Block::PlannedToStop);
 				}
 			}
 			block_index = block_buffer.getNextIndex( block_index );
@@ -584,6 +584,7 @@ namespace planner {
 		// Last/newest block in buffer. Exit speed is set with minimum_planner_speed. Always recalculated.
 		next->calculate_trapezoid(minimum_planner_speed);
 		next->flags &= ~Block::Recalculate;
+		next->flags |= Block::PlannedToStop;
 	}
 
 	bool isBufferFull() {
@@ -676,8 +677,9 @@ namespace planner {
 		
 		// CLEAN ME: Ugly dirty check to prevent a lot of small moves from causing a planner buffer underrun
 		// For now, we'll just make sure each movement takes at least MIN_MS_PER_SEGMENT millisesconds to complete
-		if ((us_per_step * block->step_event_count) < MIN_MS_PER_SEGMENT) {
-			us_per_step = MIN_MS_PER_SEGMENT / block->step_event_count;
+		uint32_t min_ms_per_segment = sdcard::isPlaying() ? MIN_MS_PER_SEGMENT_SD : MIN_MS_PER_SEGMENT_USB;
+		if ((us_per_step * block->step_event_count) < min_ms_per_segment) {
+			us_per_step = min_ms_per_segment / block->step_event_count;
 		}
 		
 		float inverse_millimeters = 1.0/block->millimeters; // Inverse millimeters to remove multiple divides
@@ -867,9 +869,9 @@ namespace planner {
 		planner_recalculate();
 
 		// if we fill the buffer, start moving!
-		// if (block_buffer.getUsedCount() > 1) {
+		if (block_buffer.getUsedCount() > 2) {
 			steppers::startRunning();
-		// }
+		}
 		
 		// stepperTimingDebugPin.setValue(false);
 		return true;
@@ -877,7 +879,7 @@ namespace planner {
 	
 	void markLastMoveCommand() {
 		// if they're already running, this does no harm
-		//steppers::startRunning();
+		steppers::startRunning();
 	}
 	
 	void startHoming(const bool maximums,

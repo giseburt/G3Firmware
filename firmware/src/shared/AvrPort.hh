@@ -19,6 +19,7 @@
 #define SHARED_AVR_PORT_HH_
 
 #include <stdint.h>
+#include <util/atomic.h>
 
 #if defined (__AVR_ATmega168__) \
     || defined (__AVR_ATmega328__) \
@@ -69,6 +70,7 @@
 class AvrPort {
 private:
 	const port_base_t port_base;
+	friend class Pin;
 public:
         AvrPort() :
 	    port_base(NULL_PORT) {};
@@ -79,22 +81,27 @@ public:
 	    return port_base == NULL_PORT;
 	};
         void setPinDirectionOut(uint8_t pin_mask) const {
-	        DDRx = (DDRx | pin_mask);
+	        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+			DDRx |= (uint8_t)pin_mask;
+		}
 	};
         void setPinDirectionIn(uint8_t pin_mask_inverted) const {
-	        DDRx = (DDRx & pin_mask_inverted);
+	        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+			DDRx &= (uint8_t)pin_mask_inverted;
+		}
 	};
         bool getPin(uint8_t pin_mask) const {
-	        return (PINx & pin_mask) != 0;
+	        return (uint8_t)((uint8_t)PINx & (uint8_t)pin_mask) != 0;
 	};
-	//         void setPin(uint8_t pin_index, bool on) const {
-	//         PORTx = (PORTx & ~_BV(pin_index)) | (on?_BV(pin_index):0);
-	// };
         void setPinOn(uint8_t pin_mask) const {
-	        PORTx = PORTx | pin_mask;
+	        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { 
+			PORTx |= (uint8_t)pin_mask;
+		}
 	};
         void setPinOff(uint8_t pin_mask_inverted) const {
-	        PORTx = PORTx & pin_mask_inverted;
+	        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+			PORTx &= (uint8_t)pin_mask_inverted;
+		}
 	};
 };
 
@@ -102,20 +109,22 @@ public:
 #if defined(__AVR_ATmega644P__) || \
 	defined(__AVR_ATmega1280__) || \
 	defined(__AVR_ATmega2560__)
-static AvrPort PortA(0x20);
+static const AvrPort PortA(0x20);
 #endif // __AVR_ATmega644P__
-static AvrPort PortB(0x23);
-static AvrPort PortC(0x26);
-static AvrPort PortD(0x29);
+static const AvrPort PortB(0x23);
+static const AvrPort PortC(0x26);
+static const AvrPort PortD(0x29);
 #if defined (__AVR_ATmega1280__) || defined (__AVR_ATmega2560__)
-static AvrPort PortE(0x2C);
-static AvrPort PortF(0x2F);
-static AvrPort PortG(0x32);
-static AvrPort PortH(0x100);
-static AvrPort PortJ(0x103);
-static AvrPort PortK(0x106);
-static AvrPort PortL(0x109);
+static const AvrPort PortE(0x2C);
+static const AvrPort PortF(0x2F);
+static const AvrPort PortG(0x32);
+static const AvrPort PortH(0x100);
+static const AvrPort PortJ(0x103);
+static const AvrPort PortK(0x106);
+static const AvrPort PortL(0x109);
 #endif //__AVR_ATmega1280__
+
+static const AvrPort NullPort;
 
 #endif // SHARED_AVR_PORT_HH_
 

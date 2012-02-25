@@ -39,6 +39,7 @@ namespace planner {
 			Busy          = 1<<0,
 			Recalculate   = 1<<1,
 			NominalLength = 1<<2,
+			PlannedToStop = 1<<2,
 		} PlannerFlags;
 
 		// Fields used by the bresenham algorithm for tracing the line
