@@ -26,7 +26,7 @@
 /// possible time between steps; in practical terms, your time between steps should
 /// be at least eight times this large.  Reducing the interval can cause resource
 /// starvation; leave this at 64uS or greater unless you know what you're doing.
-#define INTERVAL_IN_MICROSECONDS 128
+#define INTERVAL_IN_MICROSECONDS 256
 
 #define TICKS_PER_ACCELERATION   5  // lower is better
 #define ACCELERATION_TICKS_PER_SECOND (1000000/(INTERVAL_IN_MICROSECONDS*TICKS_PER_ACCELERATION))
