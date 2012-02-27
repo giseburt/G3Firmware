@@ -307,7 +307,7 @@ namespace planner {
 	
 	// Calculates the maximum allowable speed at this point when you must be able to reach target_velocity using the 
 	// acceleration within the allotted distance.
-	// Needs to be conbverted to fixed-point.
+	// Needs to be converted to fixed-point.
 	FORCE_INLINE float max_allowable_speed(const float &acceleration, const float &target_velocity, const float &distance) {
 		return sqrt((target_velocity*target_velocity)-(acceleration*2.0)*distance);
 	}
@@ -416,9 +416,9 @@ namespace planner {
 	}
 	
 	// forward declare, so we can order the code in a slightly more readable fashion
-	void planner_reverse_pass_kernel(Block *previous, Block *current, Block *next);
+	inline void planner_reverse_pass_kernel(Block *previous, Block *current, Block *next);
 	void planner_reverse_pass();
-	void planner_forward_pass_kernel(Block *previous, Block *current, Block *next);
+	inline void planner_forward_pass_kernel(Block *previous, Block *current, Block *next);
 	void planner_forward_pass();
 	void planner_recalculate_trapezoids();
 
@@ -450,7 +450,7 @@ namespace planner {
 	}
 
 	// The kernel called by planner_recalculate() when scanning the plan from last to first entry.
-	void planner_reverse_pass_kernel(Block *previous, Block *current, Block *next) {
+	inline void planner_reverse_pass_kernel(Block *previous, Block *current, Block *next) {
 		if(!current) { return; }
 
 		if (next) {
@@ -460,7 +460,7 @@ namespace planner {
 			if (current->entry_speed != current->max_entry_speed && !current->flags & Block::Busy) {
 				// If nominal length true, max junction speed is guaranteed to be reached. Only compute
 				// for max allowable speed if block is decelerating and nominal length is false.
-				if ((!(current->flags & Block::NominalLength)) && (current->max_entry_speed == next->entry_speed)) {
+				if ((!(current->flags & Block::NominalLength)) && (current->max_entry_speed >= next->entry_speed)) {
 					current->entry_speed = min( current->max_entry_speed,
 						max_allowable_speed(-current->acceleration,next->entry_speed,current->millimeters));
 				} else {
@@ -491,14 +491,14 @@ namespace planner {
 	}
 
 	// The kernel called by planner_recalculate() when scanning the plan from first to last entry.
-	void planner_forward_pass_kernel(Block *previous, Block *current, Block *next) {
+	inline void planner_forward_pass_kernel(Block *previous, Block *current, Block *next) {
 		if(!previous) { return; }
 		
 		// If the previous block is busy, then we're currently executing it!
 		// We have to be careful here, but we want to try to smooth out the movement if it's not too late.
 		// That smoothing will happen in Block::calculate_trapezoid later.
 		// However, if it *is* too late, then we need to fix the current entry speed.
-		if (previous->flags & Block::Busy && previous->flags & Block::PlannedToStop && current->flags & Block::Recalculate) {
+		if (previous->flags & (Block::Busy | Block::PlannedToStop) == (Block::Busy | Block::PlannedToStop) && current->flags & Block::Recalculate) {
 			// stepperTimingDebugPin.setValue(true);
 #if 0
 			uint32_t current_step = steppers::getCurrentStep();
@@ -526,7 +526,7 @@ namespace planner {
 		// speeds have already been reset, maximized, and reverse planned by reverse planner.
 		// If nominal length is true, max junction speed is guaranteed to be reached. No need to recheck.
 		if (!(previous->flags & Block::NominalLength)) {
-			if (previous->entry_speed == current->entry_speed) {
+			if (previous->entry_speed <= current->entry_speed) {
 				float entry_speed = min( current->entry_speed,
 					max_allowable_speed(-previous->acceleration,previous->entry_speed,previous->millimeters) );
 
