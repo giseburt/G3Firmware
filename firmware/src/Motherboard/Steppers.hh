@@ -23,6 +23,7 @@
 #include "Pin.hh"
 #include "Command.hh"
 #include "Point.hh"
+#include "Planner.hh"
 
 #include "Types.hh"
 #include "Motherboard.hh"
@@ -78,10 +79,10 @@ namespace steppers {
 
     void startRunning();
 
-    void currentBlockChanged();
+    bool currentBlockChanged(const planner::Block *block_check);
 
     uint32_t getCurrentStep();
-    uint32_t getCurrentFeedrate();
+    uint32_t getCurrentFeedrateAndStep(uint32_t &step_return, uint32_t &steps_to_calc);
 };
 
 #endif // STEPPERS_HH_

@@ -58,6 +58,7 @@ namespace planner {
 		float entry_speed;                                 // Entry speed at previous-current junction in mm/min
 		float max_entry_speed;                             // Maximum allowable junction entry speed in mm/min
 		float millimeters;                                 // The total travel of this block in mm
+		float steps_per_mm;                                // The integrated steps/mm for this move
 		float acceleration;                                // acceleration mm/sec^2
 		// float stop_speed;                            // Speed to decelerate to if this is the last move
 		// uint8_t recalculate_flag;                    // Planner flag to recalculate trapezoids on entry junction
@@ -136,6 +137,9 @@ namespace planner {
 	
 	// pushes the tail forward, making it available
 	void doneWithNextBlock();
+	
+	// how many items are in the buffer
+	uint8_t bufferCount();
 	
 	// mark that the last move command from the buffer
 	void markLastMoveCommand();

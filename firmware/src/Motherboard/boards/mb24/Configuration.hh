@@ -219,6 +219,9 @@
 // if unwanted behavior is observed on a user's machine when running at very slow speeds.
 #define DEFAULT_MINIMUM_PLANNER_SPEED 4.0 // (mm/sec)
 
+// The amount if time, maximum, that it'll take to recalculate a plan block that's running
+#define MAX_TIME_TO_RECALCULATE_BLOCK 4000 //us
+
 //  define CENTREPEDAL to use centrepedal calucations -- so far I can't get there to work -Rob
 #undef CENTREPEDAL
 #define DEFAULT_JUNCTION_DEVIATION 0.05 // mm
