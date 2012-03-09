@@ -452,36 +452,45 @@ namespace planner {
 	// All planner computations are performed with doubles (float on Arduinos) to minimize numerical round-
 	// off errors. Only when planned values are converted to stepper rate parameters, these are integers.
 
-	void planner_recalculate() {   
-		planner_reverse_pass();
-		planner_forward_pass();
-		planner_recalculate_trapezoids();
+	void planner_recalculate() {
+		do {
+			if (force_replan_from_stopped) {
+				Block *tail_block = block_buffer.getTail();
+				tail_block->entry_speed = minimum_planner_speed;
+				force_replan_from_stopped = false;
+				tail_block->flags |= Block::Recalculate;
+			}
+			planner_reverse_pass();
+			planner_forward_pass();
+			planner_recalculate_trapezoids();
+		// If force_replan_from_stopped got set while we were planning, we need to start over
+		} while (force_replan_from_stopped);
 	}
 
 	// The kernel called by planner_recalculate() when scanning the plan from last to first entry.
 	inline void planner_reverse_pass_kernel(Block *current, Block *next) {
 		if(!current) { return; }
-			// If entry speed is already at the maximum entry speed, no need to recheck. Block is cruising.
-			// If not, block in state of acceleration or deceleration. Reset entry speed to maximum and
-			// check for maximum allowable speed reductions to ensure maximum possible planned speed.
-			if (current->entry_speed != current->max_entry_speed && !current->flags & Block::Busy) {
-				// If nominal length true, max junction speed is guaranteed to be reached. Only compute
-				// for max allowable speed if block is decelerating and nominal length is false.
-				if ((!(current->flags & Block::NominalLength)) && (current->max_entry_speed >= next->entry_speed)) {
-					current->entry_speed = min( current->max_entry_speed,
-						max_allowable_speed(-current->acceleration,next->entry_speed,current->millimeters));
-				} else {
-					current->entry_speed = current->max_entry_speed;
-				}
-				current->flags |= Block::Recalculate;
+
+		// If entry speed is already at the maximum entry speed, no need to recheck. Block is cruising.
+		// If not, block in state of acceleration or deceleration. Reset entry speed to maximum and
+		// check for maximum allowable speed reductions to ensure maximum possible planned speed.
+		if (current->entry_speed != current->max_entry_speed && !current->flags & Block::Busy) {
+			// If nominal length true, max junction speed is guaranteed to be reached. Only compute
+			// for max allowable speed if block is decelerating and nominal length is false.
+			if ((!(current->flags & Block::NominalLength)) && (current->max_entry_speed >= next->entry_speed)) {
+				current->entry_speed = min( current->max_entry_speed,
+					max_allowable_speed(-current->acceleration,next->entry_speed,current->millimeters));
+			} else {
+				current->entry_speed = current->max_entry_speed;
 			}
+			current->flags |= Block::Recalculate;
 		}
 	}
 
 	// planner_recalculate() needs to go over the current plan twice. Once in reverse and once forward. This 
 	// implements the reverse pass.
 	void planner_reverse_pass() {
-		if(block_buffer.getUsedCount() > 1) {
+		if (block_buffer.getUsedCount() > 1) {
 			uint8_t block_index = block_buffer.getHeadIndex();
 			// block[] contains {current, next}
 			Block *block[2] = { &block_buffer[block_index], NULL };
@@ -579,6 +588,10 @@ namespace planner {
 		return is_buffer_empty;
 	}
 	
+	bool isReady() {
+		return !(force_replan_from_stopped | block_buffer.isEmpty());
+	}
+	
 	uint8_t bufferCount() {
 		return block_buffer.getUsedCount();
 	}
@@ -645,7 +658,7 @@ namespace planner {
 				local_step_event_count = abs_steps;
 			}
 			delta_mm[i] = ((float)steps[i])/axes[i].steps_per_mm;
-			if (i < A_AXIS || local_millimeters == 0) // cound distznce of A and B only if X, Y, and Z don't move
+			if (i < A_AXIS || local_millimeters == 0) // count distance of A and B only if X, Y, and Z don't move
 				local_millimeters += delta_mm[i] * delta_mm[i];
 		// 	if (target[i] < position[i]) { block->direction_bits |= (1<<i); }
 		}		
@@ -856,6 +869,10 @@ namespace planner {
 	}
 	
 	void markLastMoveCommand() {
+		// use this opportunity to replan if needed
+		if (force_replan_from_stopped)
+			planner_recalculate();
+		
 		// if they're already running, this does no harm
 		steppers::startRunning();
 	}

@@ -131,6 +131,7 @@ namespace planner {
 	
 	bool isBufferFull();
 	bool isBufferEmpty();
+	bool isReady();
 	
 	// Fetches the *tail*
 	Block *getNextBlock();

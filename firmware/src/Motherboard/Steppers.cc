@@ -217,10 +217,14 @@ bool getNextMove() {
 		
 		if (force_replan == true ) {
 			planner::forceReplanFromStop();
+			// note that we're still running
+			is_running = true;
+			// but we don't have anything to work with yet
+			return false;
 		}
 	}
 	
-	if (planner::isBufferEmpty()) {
+	if (!planner::isReady()) {
 		// stepperTimingDebugPin.setValue(true);
 		// stepperTimingDebugPin.setValue(false);
 		return false;
@@ -385,7 +389,7 @@ bool currentBlockChanged(const planner::Block *block_check) {
 		// We do the rest after the last else below
 	}
 	// B- We are still in plateau. (The plateau speed won't change, and won't get shorter.)
-	else (feedrate_changerate == 0) {
+	else if (feedrate_changerate == 0) {
 		
 		feedrate_steps_remaining = current_block->decelerate_after - steps_in;
 		feedrate_target = current_block->nominal_rate;
@@ -393,7 +397,7 @@ bool currentBlockChanged(const planner::Block *block_check) {
 		// We do the rest after the last else below
 	}
 	// C- We are decelerating, and are still above current_block->final_rate
-	else (feedrate > current_block->final_rate) {
+	else if (feedrate > current_block->final_rate) {
 		feedrate_target = current_block->final_rate;
 		// This is unnecesary, I think. -Rob
 		feedrate_elements[current_feedrate_index].target = current_block->final_rate;
