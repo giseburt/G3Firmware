@@ -75,7 +75,7 @@ namespace planner {
 		Block() : target() {};
 		
 	// functions
-		void calculate_trapezoid(const float &exit_factor_speed);
+		bool calculate_trapezoid(const float &exit_factor_speed);
 	};
 
 	/// Initilaize the planner data structures
@@ -143,6 +143,9 @@ namespace planner {
 	
 	// mark that the last move command from the buffer
 	void markLastMoveCommand();
+	
+	// force the plan to be recalculated, with the tail starting froma stop
+	void forceReplanFromStop();
 }
 
 #endif /* end of include guard: PLANNER_HH */

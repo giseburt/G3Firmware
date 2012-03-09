@@ -252,9 +252,10 @@ namespace planner {
 	
 	Block block_buffer_data[BLOCK_BUFFER_SIZE];
 	ReusingCircularBufferTempl<Block> block_buffer(BLOCK_BUFFER_SIZE, block_buffer_data);
+		
+	uint32_t additional_ms_per_segment;
 	
-	// let's get verbose
-	volatile bool is_planning_and_using_prev_speed = false;
+	volatile bool force_replan_from_stopped;
 	
 	void init()
 	{
@@ -358,7 +359,8 @@ namespace planner {
 
 	// Calculates trapezoid parameters so that the entry- and exit-speed is compensated by the provided factors.
 	// calculate_trapezoid_for_block(block, block->entry_speed/block->nominal_speed, exit_factor_speed/block->nominal_speed);
-	void Block::calculate_trapezoid(const float &exit_factor_speed) {
+	// Returns if it was able to reclaculate the block. Only fails for busy blocks.
+	bool Block::calculate_trapezoid(const float &exit_factor_speed) {
 		// stepperTimingDebugPin.setValue(true);
 
 		float entry_factor = entry_speed/nominal_speed;
@@ -400,7 +402,8 @@ namespace planner {
 			accelerate_steps = min(accelerate_steps, (int32_t)step_event_count);
 			plateau_steps = 0;
 		}
-
+		
+		bool successfully_replanned = true;
 		ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {  // Fill variables used by the stepper in a critical section
 			// if(!(flags & Block::Busy)) {
 				accelerate_until = accelerate_steps;
@@ -411,13 +414,14 @@ namespace planner {
 			if(flags & Block::Busy) {
 				stepperTimingDebugPin.setValue(true);
 				stepperTimingDebugPin.setValue(false);
-				steppers::currentBlockChanged(this);
+				successfully_replanned = steppers::currentBlockChanged(this);
 				stepperTimingDebugPin.setValue(true);
 				stepperTimingDebugPin.setValue(false);
 			}
 		} // ISR state will be automatically restored here
-
+		
 		// stepperTimingDebugPin.setValue(false);
+		return successfully_replanned;
 	}
 	
 	// forward declare, so we can order the code in a slightly more readable fashion
@@ -457,58 +461,6 @@ namespace planner {
 	// The kernel called by planner_recalculate() when scanning the plan from last to first entry.
 	inline void planner_reverse_pass_kernel(Block *current, Block *next) {
 		if(!current) { return; }
-
-		if (next) {
-			// If the previous block is busy, then we're currently executing it!
-			// We have to be careful here, but we want to try to smooth out the movement if it's not too late.
-			// That smoothing will happen in Block::calculate_trapezoid later.
-			// However, if it *is* too late, then we need to fix the current entry speed.
-			if (current && (current->flags & (Block::Busy | Block::PlannedToStop)) == (Block::Busy | Block::PlannedToStop) && (next->flags & Block::Recalculate)) {
-				stepperTimingDebugPin.setValue(true);
-	#if 1
-				uint32_t current_step = nominal_rate; // we pass the nominal_rate in
-				uint32_t steps_to_calc;
-				uint32_t current_feedrate = steppers::getCurrentFeedrateAndStep(current_step, steps_to_calc);
-				// current_feedrate is in steps/second, but entry_speed is in mm/s
-				// use the ratio of nominal_speed/nominal_rate to figure the current speed
-				float current_speed = ((float)current_feedrate * current->nominal_speed)/(float)current->nominal_rate;
-				uint32_t steps_left = current->step_event_count - current_step;
-				if (steps_left < steps_to_calc) {
-					// Oh no! We don't have time to correct the feedrate
-					// So, we will set the next entry speed to our current speed, and bail
-					next->entry_speed = current_speed;
-					next->max_entry_speed = current_speed;
-					
-					// If we're moving too fast, we simply bump the speed of the next move and decelerate as
-					// needed from there.
-					next->nominal_speed = max(next->nominal_speed, current_speed);
-					
-					// make sure we don't recalculate this block, and clear PlannedToStop
-					current->flags &= ~(Block::Recalculate|Block::PlannedToStop);
-					stepperTimingDebugPin.setValue(false);
-					stepperTimingDebugPin.setValue(true);
-				} else {
-					steps_left -= steps_to_calc; // we have already accounted for this in the stepper code
-					
-					// adjust the previous block to just cover the space left, and indicate recalculation
-					current->entry_speed = current_speed;
-					current->max_entry_speed = current_speed;
-
-					// Recalculate the length of the movement -- for acceleration only.
-					// The Stepper/Axis objects have track of actual movement length by now.
-					current->step_event_count = steps_left;
-					current->millimeters = steps_left / current->steps_per_mm;
-					current->flags |= Block::Recalculate;
-					// assume it's not nominal length, to be safe
-					current->flags &= ~Block::NominalLength;
-				}
-				
-	#else
-				current->entry_speed = minimum_planner_speed;
-	#endif
-				stepperTimingDebugPin.setValue(false);
-			}
-
 			// If entry speed is already at the maximum entry speed, no need to recheck. Block is cruising.
 			// If not, block in state of acceleration or deceleration. Reset entry speed to maximum and
 			// check for maximum allowable speed reductions to ensure maximum possible planned speed.
@@ -597,7 +549,12 @@ namespace planner {
 				// Recalculate if current block entry or exit junction speed has changed.
 				if ((current->flags & Block::Recalculate) || (next->flags & Block::Recalculate)) {
 					// NOTE: Entry and exit factors always > 0 by all previous logic operations.
-					current->calculate_trapezoid(next->entry_speed);
+					bool sucessfully_replanned = current->calculate_trapezoid(next->entry_speed);
+					if (!sucessfully_replanned) {
+						next->entry_speed = minimum_planner_speed;
+						// Bump the min_ms_per_segment so this doesn't happen again
+						additional_ms_per_segment += 500;
+					}
 					// Reset current only to ensure next trapezoid is computed
 					// Also make sure the PlannedToStop flag gets cleared, since we are planning to the next move
 					current->flags &= ~(Block::Recalculate|Block::PlannedToStop);
@@ -619,13 +576,6 @@ namespace planner {
 	bool isBufferEmpty() {
 		bool is_buffer_empty = block_buffer.isEmpty();
 		
-		// // if we buffer underrun, we need to make sure the planner starts from "stopped"
-		// if (is_buffer_empty && !is_planning_and_using_prev_speed) {
-		// 	for (int i = 0; i < STEPPER_COUNT; i++) {
-		// 		previous_speed[i] = 0.0;
-		// 	}
-		// 	previous_nominal_speed = 0.0;
-		// }
 		return is_buffer_empty;
 	}
 	
@@ -706,7 +656,7 @@ namespace planner {
 		
 		// CLEAN ME: Ugly dirty check to prevent a lot of small moves from causing a planner buffer underrun
 		// For now, we'll just make sure each movement takes at least MIN_MS_PER_SEGMENT millisesconds to complete
-		uint32_t min_ms_per_segment = sdcard::isPlaying() ? MIN_MS_PER_SEGMENT_SD : MIN_MS_PER_SEGMENT_USB;
+		uint32_t min_ms_per_segment = additional_ms_per_segment + (sdcard::isPlaying() ? MIN_MS_PER_SEGMENT_SD : MIN_MS_PER_SEGMENT_USB);
 		if ((us_per_step * local_step_event_count) < min_ms_per_segment) {
 			us_per_step = min_ms_per_segment / local_step_event_count;
 		}
@@ -783,9 +733,6 @@ namespace planner {
 		// Start with a safe speed
 		float vmax_junction = minimum_planner_speed;
 		
-		// block clearing of previous_speed
-		is_planning_and_using_prev_speed = true;
-
 		// Now determine the safe max entry speed for this move
 		// Skip the first block
 		if ((!block_buffer.isEmpty()) && (previous_nominal_speed > 0.0)) {
@@ -849,8 +796,6 @@ namespace planner {
 				}
 			}
 			
-			// block clearing of previous_speed
-			is_planning_and_using_prev_speed = true;
 			for (int i_axis = Z_AXIS; i_axis < STEPPER_COUNT; i_axis++) {
 				float jerk = abs(previous_speed[i_axis] - current_speed[i_axis]);
 				if (jerk > axes[i_axis].max_axis_jerk) {
@@ -886,9 +831,6 @@ namespace planner {
 		memcpy(previous_speed, current_speed, sizeof(previous_speed)); // previous_speed[] = current_speed[]
 		previous_nominal_speed = local_nominal_speed;
 
-		// allow clearing of previous speed again
-		is_planning_and_using_prev_speed = false;
-
 		// Update position
 		position = target;
 		
@@ -903,7 +845,7 @@ namespace planner {
 		block_buffer.bumpHead();
 
 		planner_recalculate();
-
+		
 		// if we fill the buffer, start moving!
 		// if (block_buffer.getUsedCount() > 2) {
 			steppers::startRunning();
@@ -916,6 +858,10 @@ namespace planner {
 	void markLastMoveCommand() {
 		// if they're already running, this does no harm
 		steppers::startRunning();
+	}
+	
+	void forceReplanFromStop() {
+		force_replan_from_stopped = true;
 	}
 	
 	void startHoming(const bool maximums,
@@ -936,6 +882,9 @@ namespace planner {
 		previous_nominal_speed = 0.0;
 		
 		block_buffer.clear();
+		
+		additional_ms_per_segment = 0;
+		force_replan_from_stopped = false;
 
 #ifdef CENTREPEDAL
 		previous_unit_vec[0]= 0.0;
