@@ -126,8 +126,8 @@ void setHoldZ(bool holdZ_in) {
 }
 
 inline void prepareFeedrateIntervals() {
-	// if (current_feedrate_index > 2)
-	// 	return;
+	if (current_feedrate_index > 2)
+		return;
 	feedrate_steps_remaining  = feedrate_elements[current_feedrate_index].steps;
 	feedrate_changerate       = feedrate_elements[current_feedrate_index].rate;
 	feedrate_target           = feedrate_elements[current_feedrate_index].target;
@@ -370,18 +370,24 @@ bool currentBlockChanged(const planner::Block *block_check) {
 	// clear PlannedToStop so we know we got the new plan in
 	current_block->flags &= ~planner::Block::PlannedToStop;
 
+	int32_t temp_changerate = feedrate_elements[current_feedrate_index].rate;
+
 	current_feedrate_index = 0;
 	int feedrate_being_setup = 0;
 	// A- We are still accelerating. (The phase can only get longer, so we'lll assume the rest.)
-	if (feedrate_changerate > 0) {
+	if (temp_changerate > 0) {
+		// one beep
+		stepperTimingDebugPin.setValue(true);
+		stepperTimingDebugPin.setValue(false);
+                
 		// If we're accelerating, then we will only possibly extend the acceleration phase,
 		// which means we have one for sure, and it has to be the first one, index 0.
 		feedrate_elements[0].steps     = current_block->accelerate_until;
 		feedrate_elements[0].rate      = current_block->acceleration_rate;
 		feedrate_elements[0].target    = current_block->nominal_rate;
-		feedrate_target = current_block->nominal_rate;
 		
 		feedrate_steps_remaining = feedrate_elements[0].steps - steps_in;
+		feedrate_target = current_block->nominal_rate;
 		
 		// leave it ready to setup plateau and deceleration
 		feedrate_being_setup = 1;
@@ -389,7 +395,12 @@ bool currentBlockChanged(const planner::Block *block_check) {
 		// We do the rest after the last else below
 	}
 	// B- We are still in plateau. (The plateau speed won't change, and won't get shorter.)
-	else if (feedrate_changerate == 0) {
+	else if (temp_changerate == 0) {
+		// two beeps
+		stepperTimingDebugPin.setValue(true);
+		stepperTimingDebugPin.setValue(false);
+		stepperTimingDebugPin.setValue(true);
+		stepperTimingDebugPin.setValue(false);
 		
 		feedrate_steps_remaining = current_block->decelerate_after - steps_in;
 		feedrate_target = current_block->nominal_rate;
@@ -398,12 +409,17 @@ bool currentBlockChanged(const planner::Block *block_check) {
 	}
 	// C- We are decelerating, and are still above current_block->final_rate
 	else if (feedrate > current_block->final_rate) {
-		feedrate_target = current_block->final_rate;
-		// This is unnecesary, I think. -Rob
-		feedrate_elements[current_feedrate_index].target = current_block->final_rate;
+		// three beeps
+		stepperTimingDebugPin.setValue(true);
+		stepperTimingDebugPin.setValue(false);
+		stepperTimingDebugPin.setValue(true);
+		stepperTimingDebugPin.setValue(false);
+		stepperTimingDebugPin.setValue(true);
+		stepperTimingDebugPin.setValue(false);
 
 		// 'Till the end of *time*, er, this move...
 		feedrate_steps_remaining = INT32_MAX;
+		feedrate_target = current_block->final_rate;
 
 		return true;
 	}
@@ -422,9 +438,6 @@ bool currentBlockChanged(const planner::Block *block_check) {
 	
 	// setup deceleration
 	if (current_block->decelerate_after < current_block->step_event_count) {
-		if (feedrate_being_setup == 0)
-			feedrate = current_block->nominal_rate;
-
 		// To prevent "falling off the end" we will say we have a "bazillion" steps left...
 		feedrate_elements[feedrate_being_setup].steps     = INT32_MAX; //current_block->step_event_count - current_block->decelerate_after;
 		feedrate_elements[feedrate_being_setup].rate      = -current_block->acceleration_rate;
@@ -477,14 +490,14 @@ void startRunning() {
 
 bool doInterrupt() {
 	if (is_running) {
-                stepperTimingDebugPin.setValue(true);
+                // stepperTimingDebugPin.setValue(true);
 		timer_counter -= INTERVAL_IN_MICROSECONDS;
 
 		if (timer_counter < 0) {
 			// if we are supposed to step too fast, we simulate double-size microsteps
 			int8_t feedrate_multiplier = 1;
 			timer_counter += feedrate_inverted;
-			while (timer_counter < -feedrate_inverted && feedrate_multiplier < intervals_remaining) {
+			while (timer_counter < 0 && feedrate_multiplier < intervals_remaining) {
 				feedrate_multiplier++;
 				timer_counter += feedrate_inverted;
 			}
@@ -501,18 +514,18 @@ bool doInterrupt() {
 			
 			intervals_remaining -= feedrate_multiplier;
 			
-			stepperTimingDebugPin.setValue(false);
-			stepperTimingDebugPin.setValue(true);
+			// stepperTimingDebugPin.setValue(false);
+			// stepperTimingDebugPin.setValue(true);
 
 			if (intervals_remaining <= 0) { // should never need the < part, but just in case...
+				stepperTimingDebugPin.setValue(true);
 				stepperTimingDebugPin.setValue(false);
 				stepperTimingDebugPin.setValue(true);
-				// sei(); // allow interrupts again
+				stepperTimingDebugPin.setValue(false);
 				bool got_a_move = getNextMove();
-				if (!got_a_move) {
-	                                stepperTimingDebugPin.setValue(false);
+				// if (!got_a_move) {
 					return is_running;
-				}
+				// }
 			}
 			
 			if ((feedrate_steps_remaining-=feedrate_multiplier) <= 0) {
@@ -536,15 +549,26 @@ bool doInterrupt() {
 		
 			if ((feedrate_changerate > 0 && feedrate > feedrate_target)
 			    || (feedrate_changerate < 0 && feedrate < feedrate_target)) {
+				// four beeps
+				stepperTimingDebugPin.setValue(true);
+		                stepperTimingDebugPin.setValue(false);
+		                stepperTimingDebugPin.setValue(true);
+		                stepperTimingDebugPin.setValue(false);
+		                stepperTimingDebugPin.setValue(true);
+		                stepperTimingDebugPin.setValue(false);
+		                stepperTimingDebugPin.setValue(true);
+		                stepperTimingDebugPin.setValue(false);
+		                
 				feedrate_changerate = 0;
 				feedrate = feedrate_target;
 			} 
 
 		}
 		
-                stepperTimingDebugPin.setValue(false);
+                // stepperTimingDebugPin.setValue(false);
 		return is_running;
-	} else if (is_homing) {
+	}
+	else if (is_homing) {
 		timer_counter -= INTERVAL_IN_MICROSECONDS;
 		if (timer_counter <= 0) {
 			is_homing = false;
@@ -554,9 +578,6 @@ bool doInterrupt() {
 				feedrate_multiplier++;
 				timer_counter += feedrate_inverted;
 			}
-
-			stepperTimingDebugPin.setValue(false);
-			stepperTimingDebugPin.setValue(true);
 			
 			// Warning: do N || is_homing
 			// is_homing || N will not execute N if is_homing

@@ -60,7 +60,7 @@ namespace planner {
 		float millimeters;                                 // The total travel of this block in mm
 		float steps_per_mm;                                // The integrated steps/mm for this move
 		float acceleration;                                // acceleration mm/sec^2
-		// float stop_speed;                            // Speed to decelerate to if this is the last move
+		float stop_speed;                            // Speed to decelerate to if this is the last move
 		// uint8_t recalculate_flag;                    // Planner flag to recalculate trapezoids on entry junction
 		// uint8_t nominal_length_flag;                 // Planner flag for nominal speed always reached
 
