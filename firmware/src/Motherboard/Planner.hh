@@ -36,10 +36,12 @@ namespace planner {
 	class Block {
 	public:
 		typedef enum {
-			Busy          = 1<<0,
-			Recalculate   = 1<<1,
-			NominalLength = 1<<2,
-			PlannedToStop = 1<<3,
+			Busy            = 1<<0,
+			Recalculate     = 1<<1,
+			NominalLength   = 1<<2,
+			PlannedToStop   = 1<<3,
+			PlannedFromStop = 1<<4,
+			Locked          = 1<<5,
 		} PlannerFlags;
 
 		// Fields used by the bresenham algorithm for tracing the line

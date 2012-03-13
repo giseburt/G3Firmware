@@ -412,11 +412,15 @@ namespace planner {
 				final_rate       = local_final_rate;
 			// }
 			if(flags & Block::Busy) {
-				// stepperTimingDebugPin.setValue(true);
-				// stepperTimingDebugPin.setValue(false);
+				stepperTimingDebugPin.setValue(true);
+				stepperTimingDebugPin.setValue(false);
 				successfully_replanned = steppers::currentBlockChanged(this);
-				// stepperTimingDebugPin.setValue(true);
-				// stepperTimingDebugPin.setValue(false);
+				stepperTimingDebugPin.setValue(true);
+				stepperTimingDebugPin.setValue(false);
+				if (successfully_replanned) {
+					stepperTimingDebugPin.setValue(true);
+					stepperTimingDebugPin.setValue(false);
+				}
 			}
 		} // ISR state will be automatically restored here
 		
@@ -455,16 +459,14 @@ namespace planner {
 	void planner_recalculate() {
 		do {
 			if (force_replan_from_stopped) {
-				stepperTimingDebugPin.setValue(true);
+				// stepperTimingDebugPin.setValue(true);
 				Block *tail_block = block_buffer.getTail();
-				// if the newest block is busy, then we already did the entry_speed change
-				// in planner_recalculate_trapezoids()
-				if (!(tail_block->flags & Block::Busy)) {
+				if (!(tail_block->flags & Block::PlannedFromStop)) {
 					tail_block->entry_speed = tail_block->stop_speed;
-					tail_block->flags |= Block::Recalculate;
+					tail_block->flags |= Block::Recalculate | Block::PlannedFromStop;
 				}
 				force_replan_from_stopped = false;
-				stepperTimingDebugPin.setValue(false);
+				// stepperTimingDebugPin.setValue(false);
 			}
 			planner_reverse_pass();
 			planner_forward_pass();
@@ -569,7 +571,7 @@ namespace planner {
 					if (!sucessfully_replanned) {
 						stepperTimingDebugPin.setValue(true);
 						next->entry_speed = next->stop_speed;
-						next->flags |= Block::Recalculate;
+						next->flags |= Block::Recalculate | Block::PlannedFromStop;
 						// Bump the min_ms_per_segment so this doesn't happen again
 						// additional_ms_per_segment += 500;
 						force_replan_from_stopped = true;
@@ -614,6 +616,18 @@ namespace planner {
 	}
 	
 	void doneWithNextBlock() {
+		// first, check that, if the previous plan was to a stop,
+		// that the next plan is to a stop
+		if (block_buffer.getUsedCount() > 1) {
+			Block *block = block_buffer.getTail();
+			if (block->flags & planner::Block::PlannedToStop) {
+				block = &block_buffer[block_buffer.getNextIndex(block_buffer.getTailIndex())];
+				if (block->flags & planner::Block::PlannedFromStop) {
+					force_replan_from_stopped = true;
+				}
+			}
+		}
+		
 		block_buffer.bumpTail();
 	}
 	
@@ -662,18 +676,6 @@ namespace planner {
 		float delta_mm[STEPPER_COUNT];
 		float local_millimeters = 0.0;
 		uint32_t local_step_event_count = 0;
-		// // Compute direction bits for this block -- UNUSED FOR NOW
-		// block->direction_bits = 0;
-		for (int i = 0; i < STEPPER_COUNT; i++) {
-			int32_t abs_steps = abs(steps[i]);
-			if (abs_steps > local_step_event_count) {
-				local_step_event_count = abs_steps;
-			}
-			delta_mm[i] = ((float)steps[i])/axes[i].steps_per_mm;
-			if (i < A_AXIS || local_millimeters == 0) // count distance of A and B only if X, Y, and Z don't move
-				local_millimeters += delta_mm[i] * delta_mm[i];
-		// 	if (target[i] < position[i]) { block->direction_bits |= (1<<i); }
-		}
 		
 		// intentionally unraveled loop
 		int32_t abs_steps = abs(steps[X_AXIS]);
@@ -826,7 +828,6 @@ namespace planner {
 		// Now determine the safe max entry speed for this move
 		// Skip the first block
 		if ((!block_buffer.isEmpty()) && (previous_nominal_speed > 0.0)) {
-
 			float jerk = sqrt(pow((current_speed[X_AXIS]-previous_speed[X_AXIS]), 2)+pow((current_speed[Y_AXIS]-previous_speed[Y_AXIS]), 2));
 			if((previous_speed[X_AXIS] != 0.0) || (previous_speed[Y_AXIS] != 0.0)) {
 				vmax_junction = local_nominal_speed;
@@ -842,7 +843,10 @@ namespace planner {
 					vmax_junction *= (axes[i_axis].max_axis_jerk/jerk);
 				}
 			}
+		} else {
+			block->flags |= Block::PlannedFromStop;
 		}
+		block->flags |= Block::PlannedToStop;
 
 #else // CENTREPEDAL
 		
