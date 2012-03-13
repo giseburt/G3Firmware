@@ -433,7 +433,7 @@ namespace planner {
 	void planner_reverse_pass();
 	inline void planner_forward_pass_kernel(Block *previous, Block *current, Block *next);
 	void planner_forward_pass();
-	void planner_recalculate_trapezoids();
+	bool planner_recalculate_trapezoids();
 
 	// Recalculates the motion plan according to the following algorithm:
 	//
@@ -457,22 +457,22 @@ namespace planner {
 	// off errors. Only when planned values are converted to stepper rate parameters, these are integers.
 
 	void planner_recalculate() {
-		do {
-			if (force_replan_from_stopped) {
-				// stepperTimingDebugPin.setValue(true);
-				Block *tail_block = block_buffer.getTail();
-				if (!(tail_block->flags & Block::PlannedFromStop)) {
-					tail_block->entry_speed = tail_block->stop_speed;
-					tail_block->flags |= Block::Recalculate | Block::PlannedFromStop;
-				}
-				force_replan_from_stopped = false;
-				// stepperTimingDebugPin.setValue(false);
+		if (force_replan_from_stopped) {
+			// stepperTimingDebugPin.setValue(true);
+			Block *tail_block = block_buffer.getTail();
+			if (!(tail_block->flags & Block::PlannedFromStop)) {
+				tail_block->entry_speed = tail_block->stop_speed;
+				tail_block->flags |= Block::Recalculate | Block::PlannedFromStop;
 			}
+			// stepperTimingDebugPin.setValue(false);
+		}
+		do {
 			planner_reverse_pass();
 			planner_forward_pass();
-			planner_recalculate_trapezoids();
-		// If force_replan_from_stopped got set while we were planning, we need to start over
-		} while (force_replan_from_stopped);
+			if (planner_recalculate_trapezoids()) {
+				break;
+			}
+		} while (1);
 	}
 
 	// The kernel called by planner_recalculate() when scanning the plan from last to first entry.
@@ -555,7 +555,8 @@ namespace planner {
 	// Recalculates the trapezoid speed profiles for all blocks in the plan according to the 
 	// entry_factor for each junction. Must be called by planner_recalculate() after 
 	// updating the blocks.
-	void planner_recalculate_trapezoids() {
+	// Returns true if planning succeded.
+	bool planner_recalculate_trapezoids() {
 		int8_t block_index = block_buffer.getTailIndex();
 		Block *current;
 		Block *next = NULL;
@@ -573,10 +574,9 @@ namespace planner {
 						next->entry_speed = next->stop_speed;
 						next->flags |= Block::Recalculate | Block::PlannedFromStop;
 						// Bump the min_ms_per_segment so this doesn't happen again
-						// additional_ms_per_segment += 500;
-						force_replan_from_stopped = true;
+						// additional_ms_per_segment += 250;
 						stepperTimingDebugPin.setValue(false);
-						return;
+						return false;
 					}
 					// Reset current only to ensure next trapezoid is computed
 					// Also make sure the PlannedToStop flag gets cleared, since we are planning to the next move
@@ -590,6 +590,7 @@ namespace planner {
 		next->calculate_trapezoid(next->stop_speed);
 		next->flags &= ~Block::Recalculate;
 		next->flags |= Block::PlannedToStop;
+		return true;
 	}
 
 	bool isBufferFull() {
