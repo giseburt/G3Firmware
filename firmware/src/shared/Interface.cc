@@ -12,30 +12,32 @@ namespace interface {
 LiquidCrystal* lcd;
 InterfaceBoard* board;
 
+static const Pin InterfaceFooPin = INTERFACE_FOO_PIN;
+
 bool isConnected() {
 
 	// Strategy: Set up the foo pin as an input, turn on pull up resistor,
 	// then measure it. If low, then we probably have an interface board.
 	// If high, we probably don't.
 
-	INTERFACE_FOO_PIN.setValue(true);
-	INTERFACE_FOO_PIN.setDirection(false);
+	InterfaceFooPin.setValue(true);
+	InterfaceFooPin.setDirection(false);
 
 	// if we are pulled down, then we have an led attached??
-	if (!INTERFACE_FOO_PIN.getValue()) {
-		INTERFACE_FOO_PIN.setDirection(true);
-		INTERFACE_FOO_PIN.setValue(true);
+	if (!InterfaceFooPin.getValue()) {
+		InterfaceFooPin.setDirection(true);
+		InterfaceFooPin.setValue(true);
 
 		return true;
 	}
 	else {
-		INTERFACE_FOO_PIN.setDirection(true);
-		INTERFACE_FOO_PIN.setValue(false);
+		InterfaceFooPin.setDirection(true);
+		InterfaceFooPin.setValue(false);
 
 		return false;
 	}
 
-	return (!INTERFACE_FOO_PIN.getValue());
+	return (!InterfaceFooPin.getValue());
 
 }
 

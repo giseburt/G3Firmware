@@ -78,20 +78,7 @@ StepperInterface Motherboard::stepper[STEPPER_COUNT] = {
 	#endif	
 };
 
-extern Pin LiquidCrystal::_data_pins[8] = {
-	LCD_D0_PIN,
-	LCD_D1_PIN,
-	LCD_D2_PIN,
-	LCD_D3_PIN,
-	NullPin,
-	NullPin,
-	NullPin,
-	NullPin
-};
-
-extern Pin LiquidCrystal::_rs_pin = LCD_RS_PIN; // LOW: command.  HIGH: character.
-extern Pin LiquidCrystal::_rw_pin = NullPin; // LOW: write to LCD.  HIGH: read from LCD.
-extern Pin LiquidCrystal::_enable_pin = LCD_ENABLE_PIN; // activated by a HIGH pulse.
+const Pin DebugPin = DEBUG_PIN;
 
 /// Create motherboard object
 Motherboard::Motherboard() :
@@ -188,7 +175,7 @@ void Motherboard::reset() {
 	TCCR2B = 0x07; // prescaler at 1/1024
 	TIMSK2 = 0x01; // OVF flag on
 	// Configure the debug pin.
-	DEBUG_PIN.setDirection(true);
+	DebugPin.setDirection(true);
 
 	// Check if the interface board is attached
         hasInterfaceBoard = interface::isConnected();
@@ -262,7 +249,7 @@ enum {
 void Motherboard::indicateError(int error_code) {
 	if (error_code == 0) {
 		blink_state = BLINK_NONE;
-		DEBUG_PIN.setValue(false);
+		DebugPin.setValue(false);
 	}
 	else if (blink_count != error_code) {
 		blink_state = BLINK_OFF;
@@ -296,7 +283,7 @@ ISR(TIMER2_OVF_vect) {
 			blinked_so_far++;
 			blink_state = BLINK_OFF;
 			blink_ovfs_remaining = OVFS_OFF;
-			DEBUG_PIN.setValue(false);
+			DebugPin.setValue(false);
 		} else if (blink_state == BLINK_OFF) {
 			if (blinked_so_far >= blink_count) {
 				blink_state = BLINK_PAUSE;
@@ -304,13 +291,13 @@ ISR(TIMER2_OVF_vect) {
 			} else {
 				blink_state = BLINK_ON;
 				blink_ovfs_remaining = OVFS_ON;
-				DEBUG_PIN.setValue(true);
+				DebugPin.setValue(true);
 			}
 		} else if (blink_state == BLINK_PAUSE) {
 			blinked_so_far = 0;
 			blink_state = BLINK_ON;
 			blink_ovfs_remaining = OVFS_ON;
-			DEBUG_PIN.setValue(true);
+			DebugPin.setValue(true);
 		}
 	}
 }

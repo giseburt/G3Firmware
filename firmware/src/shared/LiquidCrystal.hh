@@ -93,10 +93,10 @@ public:
 
   void command(uint8_t);
 
-  static Pin _data_pins[8];
-  static Pin _rs_pin; // LOW: command.  HIGH: character.
-  static Pin _rw_pin; // LOW: write to LCD.  HIGH: read from LCD.
-  static Pin _enable_pin; // activated by a HIGH pulse.
+  static const Pin _data_pins[8];
+  static const Pin _rs_pin; // LOW: command.  HIGH: character.
+  static const Pin _rw_pin; // LOW: write to LCD.  HIGH: read from LCD.
+  static const Pin _enable_pin; // activated by a HIGH pulse.
 
 private:
   void send(uint8_t, bool);

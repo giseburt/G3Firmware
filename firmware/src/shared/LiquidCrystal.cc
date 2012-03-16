@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <util/delay.h>
+#include "Configuration.hh"
 
 // When the display powers up, it is configured as follows:
 //
@@ -43,6 +44,20 @@
 //   init(1, rs, rw, enable, d0, d1, d2, d3, NullPin, NullPin, NullPin, NullPin);
 // }
 
+const Pin LiquidCrystal::_data_pins[8] = {
+	LCD_D0_PIN,
+	LCD_D1_PIN,
+	LCD_D2_PIN,
+	LCD_D3_PIN,
+	NullPin,
+	NullPin,
+	NullPin,
+	NullPin
+};
+
+const Pin LiquidCrystal::_rs_pin = LCD_RS_PIN; // LOW: command.  HIGH: character.
+const Pin LiquidCrystal::_rw_pin = NullPin; // LOW: write to LCD.  HIGH: read from LCD.
+const Pin LiquidCrystal::_enable_pin = LCD_ENABLE_PIN; // activated by a HIGH pulse.
 
 LiquidCrystal::LiquidCrystal()
 {

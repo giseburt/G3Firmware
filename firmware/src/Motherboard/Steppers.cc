@@ -49,7 +49,7 @@ volatile int32_t timer_counter;
 StepperAxis axes[STEPPER_COUNT];
 volatile bool is_homing;
 
-Pin stepperTimingDebugPin = STEPPER_TIMER_DEBUG;
+// Pin stepperTimingDebugPin = STEPPER_TIMER_DEBUG;
 
 bool holdZ = false;
 
@@ -84,8 +84,8 @@ void init(Motherboard& motherboard) {
 	acceleration_tick_counter = 0;
 	current_feedrate_index = 0;
 	
-	stepperTimingDebugPin.setDirection(true);
-	stepperTimingDebugPin.setValue(false);
+	// stepperTimingDebugPin.setDirection(true);
+	// stepperTimingDebugPin.setValue(false);
 }
 
 void abort() {
@@ -382,8 +382,8 @@ bool currentBlockChanged(const planner::Block *block_check) {
 	// A- We are still accelerating. (The phase can only get longer, so we'lll assume the rest.)
 	if (temp_changerate > 0) {
 		// one beep
-		stepperTimingDebugPin.setValue(true);
-		stepperTimingDebugPin.setValue(false);
+		// stepperTimingDebugPin.setValue(true);
+		// stepperTimingDebugPin.setValue(false);
                 
 		// If we're accelerating, then we will only possibly extend the acceleration phase,
 		// which means we have one for sure, and it has to be the first one, index 0.
@@ -403,10 +403,10 @@ bool currentBlockChanged(const planner::Block *block_check) {
 	// B- We are still in plateau. (The plateau speed won't change, and won't get shorter.)
 	else if (temp_changerate == 0) {
 		// two beeps
-		stepperTimingDebugPin.setValue(true);
-		stepperTimingDebugPin.setValue(false);
-		stepperTimingDebugPin.setValue(true);
-		stepperTimingDebugPin.setValue(false);
+		// stepperTimingDebugPin.setValue(true);
+		// stepperTimingDebugPin.setValue(false);
+		// stepperTimingDebugPin.setValue(true);
+		// stepperTimingDebugPin.setValue(false);
 		
 		feedrate_steps_remaining = local_decelerate_after - steps_in;
 		feedrate_target = local_nominal_rate;
@@ -417,12 +417,12 @@ bool currentBlockChanged(const planner::Block *block_check) {
 	// C- We are decelerating, and are still above local_final_rate
 	else if (feedrate > local_final_rate) {
 		// three beeps
-		stepperTimingDebugPin.setValue(true);
-		stepperTimingDebugPin.setValue(false);
-		stepperTimingDebugPin.setValue(true);
-		stepperTimingDebugPin.setValue(false);
-		stepperTimingDebugPin.setValue(true);
-		stepperTimingDebugPin.setValue(false);
+		// stepperTimingDebugPin.setValue(true);
+		// stepperTimingDebugPin.setValue(false);
+		// stepperTimingDebugPin.setValue(true);
+		// stepperTimingDebugPin.setValue(false);
+		// stepperTimingDebugPin.setValue(true);
+		// stepperTimingDebugPin.setValue(false);
 
 		feedrate_elements[0].steps     = INT32_MAX;
 		feedrate_elements[0].rate      = -local_acceleration_rate;
@@ -539,10 +539,10 @@ bool doInterrupt() {
 			// stepperTimingDebugPin.setValue(true);
 
 			if (intervals_remaining <= 0) { // should never need the < part, but just in case...
-				stepperTimingDebugPin.setValue(true);
-				stepperTimingDebugPin.setValue(false);
-				stepperTimingDebugPin.setValue(true);
-				stepperTimingDebugPin.setValue(false);
+				// stepperTimingDebugPin.setValue(true);
+				// stepperTimingDebugPin.setValue(false);
+				// stepperTimingDebugPin.setValue(true);
+				// stepperTimingDebugPin.setValue(false);
 				bool got_a_move = getNextMove();
 				if (!got_a_move) {
 					return is_running;
@@ -571,14 +571,14 @@ bool doInterrupt() {
 			if ((feedrate_changerate > 0 && feedrate > feedrate_target)
 			    || (feedrate_changerate < 0 && feedrate < feedrate_target)) {
 				// four beeps
-				stepperTimingDebugPin.setValue(true);
-		                stepperTimingDebugPin.setValue(false);
-		                stepperTimingDebugPin.setValue(true);
-		                stepperTimingDebugPin.setValue(false);
-		                stepperTimingDebugPin.setValue(true);
-		                stepperTimingDebugPin.setValue(false);
-		                stepperTimingDebugPin.setValue(true);
-		                stepperTimingDebugPin.setValue(false);
+				// stepperTimingDebugPin.setValue(true);
+		                // stepperTimingDebugPin.setValue(false);
+		                // stepperTimingDebugPin.setValue(true);
+		                // stepperTimingDebugPin.setValue(false);
+		                // stepperTimingDebugPin.setValue(true);
+		                // stepperTimingDebugPin.setValue(false);
+		                // stepperTimingDebugPin.setValue(true);
+		                // stepperTimingDebugPin.setValue(false);
 		                
 				feedrate_changerate = 0;
 				feedrate = feedrate_target;

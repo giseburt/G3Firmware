@@ -150,6 +150,7 @@
 #define HONOR_DEBUG_PACKETS     1
 
 #define STEPPER_TIMER_DEBUG     Pin()
+#define STEPPER_TIMER_DEBUG2    Pin()
 
 // The number of movements we can plan ahead at a time
 // THIS MUst BE A POWER OF 2! 4, 8, 16, 32, you get the idea...

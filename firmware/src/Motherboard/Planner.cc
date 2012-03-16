@@ -127,7 +127,7 @@ inline long abs(long x) { return __builtin_labs(x); }
 
 namespace planner {
 	
-	Pin stepperTimingDebugPin = STEPPER_TIMER_DEBUG2;
+	// Pin stepperTimingDebugPin = STEPPER_TIMER_DEBUG2;
 	
 	// Super-simple circular buffer, where old nodes are reused
 	// TODO: Move to a seperate file
@@ -261,8 +261,8 @@ namespace planner {
 	{
 		abort();
 
-		stepperTimingDebugPin.setDirection(true);
-		stepperTimingDebugPin.setValue(false);
+		// stepperTimingDebugPin.setDirection(true);
+		// stepperTimingDebugPin.setValue(false);
 
 #ifdef CENTREPEDAL
 		previous_unit_vec[0]= 0.0;
@@ -412,19 +412,19 @@ namespace planner {
 				final_rate       = local_final_rate;
 			// }
 			if(flags & Block::Busy) {
-				stepperTimingDebugPin.setValue(true);
-				stepperTimingDebugPin.setValue(false);
+				// stepperTimingDebugPin.setValue(true);
+				// stepperTimingDebugPin.setValue(false);
 				successfully_replanned = steppers::currentBlockChanged(this);
-				stepperTimingDebugPin.setValue(true);
-				stepperTimingDebugPin.setValue(false);
+				// stepperTimingDebugPin.setValue(true);
+				// stepperTimingDebugPin.setValue(false);
 				if (successfully_replanned) {
-					stepperTimingDebugPin.setValue(true);
-					stepperTimingDebugPin.setValue(false);
+					// stepperTimingDebugPin.setValue(true);
+					// stepperTimingDebugPin.setValue(false);
 				}
 			}
 		} // ISR state will be automatically restored here
 		
-		// stepperTimingDebugPin.setValue(false);
+		// // stepperTimingDebugPin.setValue(false);
 		return successfully_replanned;
 	}
 	
@@ -458,13 +458,13 @@ namespace planner {
 
 	void planner_recalculate() {
 		if (force_replan_from_stopped) {
-			// stepperTimingDebugPin.setValue(true);
+			// // stepperTimingDebugPin.setValue(true);
 			Block *tail_block = block_buffer.getTail();
 			if (!(tail_block->flags & Block::PlannedFromStop)) {
 				tail_block->entry_speed = tail_block->stop_speed;
 				tail_block->flags |= Block::Recalculate | Block::PlannedFromStop;
 			}
-			// stepperTimingDebugPin.setValue(false);
+			// // stepperTimingDebugPin.setValue(false);
 		}
 		do {
 			planner_reverse_pass();
@@ -570,12 +570,12 @@ namespace planner {
 					// NOTE: Entry and exit factors always > 0 by all previous logic operations.
 					bool sucessfully_replanned = current->calculate_trapezoid(next->entry_speed);
 					if (!sucessfully_replanned) {
-						stepperTimingDebugPin.setValue(true);
+						// stepperTimingDebugPin.setValue(true);
 						next->entry_speed = next->stop_speed;
 						next->flags |= Block::Recalculate | Block::PlannedFromStop;
 						// Bump the min_ms_per_segment so this doesn't happen again
 						// additional_ms_per_segment += 250;
-						stepperTimingDebugPin.setValue(false);
+						// stepperTimingDebugPin.setValue(false);
 						return false;
 					}
 					// Reset current only to ensure next trapezoid is computed
