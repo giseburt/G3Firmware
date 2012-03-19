@@ -153,6 +153,15 @@
   #define B_ENABLE_PIN            Pin()
 #endif // FOURTH_STEPPER
 
+/// Pin mappings for the LCD connection.
+// WAIT, we don't have an LCD! Why are we compiling it in?
+#define LCD_RS_PIN		NullPin
+#define LCD_ENABLE_PIN          NullPin
+#define LCD_D0_PIN		NullPin
+#define LCD_D1_PIN		NullPin
+#define LCD_D2_PIN		NullPin
+#define LCD_D3_PIN		NullPin
+
 
 // --- Debugging configuration ---
 // The pin which controls the debug LED (active high)
